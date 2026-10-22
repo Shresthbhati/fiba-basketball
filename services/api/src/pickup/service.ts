@@ -4,6 +4,7 @@ import { courts, pickupGames, pickupParticipants, users } from "../db/schema.js"
 import { MAX_RESULTS, boundingBox, haversineMeters, roundDistance } from "../geo/distance.js";
 import { AuthError } from "../identity/service.js";
 import { CHECK_IN_EARLY_MS, phaseOf, type StoredStatus } from "./phase.js";
+import { hiddenUserIds, isBlockedEitherWay } from "../trust/service.js";
 
 type Game = typeof pickupGames.$inferSelect;
 const tx = <T>(db: Db, fn: (t: Db) => Promise<T>) =>
@@ -83,6 +84,7 @@ export async function getGame(db: Db, id: string, viewerId: string | null, now =
     .where(eq(pickupParticipants.gameId, id))
     .orderBy(asc(pickupParticipants.joinedAt));
   const mine = roster.find((r) => r.userId === viewerId);
+  const hidden = viewerId ? await hiddenUserIds(db, viewerId) : new Set<string>();
   const confirmed = roster.filter((r) => r.status === "CONFIRMED").length;
   return {
     ...summary(g, confirmed, now),
@@ -93,7 +95,7 @@ export async function getGame(db: Db, id: string, viewerId: string | null, now =
     isHost: g.hostId === viewerId,
     // Names are only visible to people who are in the game.
     participants: mine && mine.status !== "CANCELLED"
-      ? roster.filter((r) => r.status !== "CANCELLED").map((r) => ({ name: r.name, status: r.status, checkedIn: r.checkedInAt !== null }))
+      ? roster.filter((r) => r.status !== "CANCELLED" && !hidden.has(r.userId)).map((r) => ({ name: r.name, status: r.status, checkedIn: r.checkedInAt !== null }))
       : undefined,
   };
 }
@@ -103,6 +105,8 @@ export async function rsvp(db: Db, gameId: string, userId: string, now = new Dat
     const [g] = await t.select().from(pickupGames).where(eq(pickupGames.id, gameId)).for("update");
     if (!g) throw new AuthError(404, "Not Found");
     if (g.status !== "OPEN" || now > g.endsAt) throw new AuthError(409, "Game is not open for RSVPs");
+    // A block between the host and this user reads as "no such game" so the block is not revealed.
+    if (await isBlockedEitherWay(t as unknown as Db, userId, g.hostId)) throw new AuthError(404, "Not Found");
     const [existing] = await t.select().from(pickupParticipants)
       .where(and(eq(pickupParticipants.gameId, gameId), eq(pickupParticipants.userId, userId)));
     if (existing && existing.status !== "CANCELLED") return { status: existing.status };

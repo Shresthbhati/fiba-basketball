@@ -11,8 +11,10 @@ import { registerCompetitions } from "./competition/routes.js";
 import { registerCourts } from "./court/routes.js";
 import { registerPickup } from "./pickup/routes.js";
 import { registerIdentity } from "./identity/routes.js";
+import { registerConsent } from "./consent/routes.js";
+import { registerTrust } from "./trust/routes.js";
 
-export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[] } = {}): Promise<FastifyInstance> {
+export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[]; requireVerifiedGuardianEmail?: boolean } = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: false,
     genReqId: (req) => (req.headers["x-request-id"] as string | undefined) ?? randomUUID(),
@@ -45,6 +47,8 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   enforceAccess(app, db);
   registerIdentity(app, db, { secureCookies: opts.secureCookies ?? true, allowedOrigins: opts.allowedOrigins ?? [] });
 
+  registerConsent(app, db, { requireVerifiedGuardianEmail: opts.requireVerifiedGuardianEmail ?? true });
+  registerTrust(app, db);
   registerCourts(app, db);
   registerPickup(app, db);
   registerCompetitions(app, db);

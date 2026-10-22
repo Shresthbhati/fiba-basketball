@@ -8,7 +8,7 @@ import * as schema from "../src/db/schema.js";
 export async function testApp() {
   const db = drizzle(new PGlite(), { schema });
   await migrate(db, { migrationsFolder: new URL("../drizzle", import.meta.url).pathname });
-  const app = await buildApp(db as unknown as Db, { secureCookies: false });
+  const app = await buildApp(db as unknown as Db, { secureCookies: false, requireVerifiedGuardianEmail: false });
   return { app, db: db as unknown as Db };
 }
 

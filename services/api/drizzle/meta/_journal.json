@@ -36,6 +36,20 @@
       "when": 1792696854080,
       "tag": "0004_mighty_scorpion",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792699751901,
+      "tag": "0005_typical_vin_gonzales",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792699753145,
+      "tag": "0006_audit_append_only",
+      "breakpoints": true
     }
   ]
 }

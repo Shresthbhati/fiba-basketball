@@ -4,5 +4,5 @@ import { connect } from "./db/connect.js";
 
 const { PORT, DATABASE_URL, NODE_ENV, ALLOWED_ORIGINS } = loadConfig();
 if (!DATABASE_URL) throw new Error("DATABASE_URL is required");
-const app = await buildApp(await connect(DATABASE_URL), { secureCookies: NODE_ENV === "production", allowedOrigins: (ALLOWED_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean) });
+const app = await buildApp(await connect(DATABASE_URL), { secureCookies: NODE_ENV === "production", requireVerifiedGuardianEmail: NODE_ENV === "production", allowedOrigins: (ALLOWED_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean) });
 await app.listen({ port: PORT, host: "0.0.0.0" });
