@@ -1,5 +1,8 @@
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { connect } from "./db/connect.js";
 
-const { PORT } = loadConfig();
-await buildApp().listen({ port: PORT, host: "0.0.0.0" });
+const { PORT, DATABASE_URL, NODE_ENV } = loadConfig();
+if (!DATABASE_URL) throw new Error("DATABASE_URL is required");
+const app = await buildApp(await connect(DATABASE_URL), { secureCookies: NODE_ENV === "production" });
+await app.listen({ port: PORT, host: "0.0.0.0" });
