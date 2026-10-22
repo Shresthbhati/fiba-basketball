@@ -26,6 +26,7 @@ export function SiteNav() {
         <SyncIndicator />
         {user ? (
           <>
+            <Link href="/safety">Safety</Link>
             <span>{user.displayName}</span>
             <button className="secondary" style={{ minHeight: 36, padding: "4px 12px" }} onClick={async () => {
               await api("/auth/logout", { method: "POST" });

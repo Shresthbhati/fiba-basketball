@@ -1,4 +1,4 @@
-import { boolean, date, doublePrecision, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, doublePrecision, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -250,4 +250,89 @@ export const wellnessChecks = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique("wellness_user_date_uq").on(t.userId, t.date)],
+);
+
+// Append-only (a database trigger rejects UPDATE and DELETE). Never store secrets or free-text health data here.
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    actorId: uuid("actor_id").references(() => users.id),
+    action: text("action").notNull(),
+    resourceType: text("resource_type"),
+    resourceId: text("resource_id"),
+    reason: text("reason"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("audit_log_resource_idx").on(t.resourceType, t.resourceId), index("audit_log_actor_idx").on(t.actorId)],
+);
+
+export const guardianRelationships = pgTable(
+  "guardian_relationships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    minorId: uuid("minor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    guardianEmail: text("guardian_email").notNull(),
+    guardianId: uuid("guardian_id").references(() => users.id, { onDelete: "cascade" }), // set on acceptance
+    status: text("status").notNull().default("PENDING"), // PENDING | ACTIVE | REVOKED
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("guardian_minor_idx").on(t.minorId), index("guardian_email_idx").on(t.guardianEmail)],
+);
+
+// A minor's consent only counts while `grantedBy` is an ACTIVE guardian of that minor (checked at read time).
+export const consentGrants = pgTable(
+  "consent_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    subjectId: uuid("subject_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    grantedBy: uuid("granted_by").notNull().references(() => users.id),
+    grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("consent_subject_idx").on(t.subjectId, t.kind)],
+);
+
+// BLOCK hides both ways; MUTE only hides the muted user from the muter.
+export const userBlocks = pgTable(
+  "user_blocks",
+  {
+    blockerId: uuid("blocker_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    blockedId: uuid("blocked_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // BLOCK | MUTE
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.blockerId, t.blockedId] })],
+);
+
+export const moderationCases = pgTable(
+  "moderation_cases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    targetType: text("target_type").notNull(), // USER | PICKUP_GAME | COURT
+    targetId: uuid("target_id").notNull(),
+    status: text("status").notNull().default("OPEN"), // OPEN | RESOLVED | DISMISSED
+    resolvedBy: uuid("resolved_by").references(() => users.id),
+    resolutionNote: text("resolution_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [index("moderation_status_idx").on(t.status, t.createdAt)],
+);
+
+export const reports = pgTable(
+  "reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    caseId: uuid("case_id").notNull().references(() => moderationCases.id, { onDelete: "cascade" }),
+    reporterId: uuid("reporter_id").notNull().references(() => users.id),
+    reason: text("reason").notNull(), // HARASSMENT | UNSAFE | SPAM | IMPERSONATION | INAPPROPRIATE | OTHER
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("reports_one_per_case_idx").on(t.caseId, t.reporterId)],
 );

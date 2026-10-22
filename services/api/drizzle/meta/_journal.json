@@ -57,6 +57,20 @@
       "when": 1792699970128,
       "tag": "0007_exercise_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792701645983,
+      "tag": "0008_great_steel_serpent",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792701647239,
+      "tag": "0009_audit_append_only",
+      "breakpoints": true
     }
   ]
 }

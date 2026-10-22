@@ -10,7 +10,7 @@ export async function testApp() {
   const db = drizzle(new PGlite(), { schema });
   await migrate(db, { migrationsFolder: new URL("../drizzle", import.meta.url).pathname });
   const mailer = new MemoryMailer();
-  const app = await buildApp(db as unknown as Db, { secureCookies: false, mailer, webBaseUrl: "http://web.test" });
+  const app = await buildApp(db as unknown as Db, { secureCookies: false, requireVerifiedGuardianEmail: false, mailer, webBaseUrl: "http://web.test" });
   return { app, db: db as unknown as Db, mailer };
 }
 

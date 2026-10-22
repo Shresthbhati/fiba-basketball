@@ -8,6 +8,7 @@ if (!DATABASE_URL) throw new Error("DATABASE_URL is required");
 
 const app = await buildApp(await connect(DATABASE_URL), {
   secureCookies: NODE_ENV === "production",
+  requireVerifiedGuardianEmail: NODE_ENV === "production",
   rateLimitScale: RATE_LIMIT_SCALE,
   allowedOrigins: (ALLOWED_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean),
   ...(WEB_BASE_URL ? { webBaseUrl: WEB_BASE_URL } : {}),

@@ -9,6 +9,7 @@ export const POLICY = {
   "team:manage": ["COACH", "TEAM_MANAGER", "ORG_ADMIN"],
   "court:verify": ["MODERATOR", "VENUE_MANAGER"],
   "moderation:review": ["MODERATOR"],
+  "audit:read": [], // PLATFORM_ADMIN only (always allowed by `decide`)
   "pickup:host": ["PLAYER", "COACH", "ORGANIZER"],
 } as const satisfies Record<string, readonly Role[]>;
 

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/index.js";
 import { MAX_RADIUS_M } from "../geo/distance.js";
+import { hasConsent } from "../consent/service.js";
 import { AuthError } from "../identity/service.js";
 import { cancelGame, cancelRsvp, checkIn, confirmComplete, createGame, getGame, rsvp, searchGames } from "./service.js";
 
@@ -16,15 +17,18 @@ const searchQuery = z.object({
   from: z.coerce.date().optional(), to: z.coerce.date().optional(),
 });
 
-// Public games need guardian consent for minors; guardian flow isn't built yet, so minors are blocked.
-const adultsOnly = (req: FastifyRequest) => {
-  if (req.user!.isMinor) throw new AuthError(403, "Public games for under-18 accounts need guardian consent (not yet available)");
+// Adults need nothing extra. An under-18 account needs PUBLIC_PICKUP consent from an active guardian.
+const needsGuardianConsent = (db: Db) => async (req: FastifyRequest) => {
+  if (req.user!.isMinor && !(await hasConsent(db, req.user!, "PUBLIC_PICKUP"))) {
+    throw new AuthError(403, "Public games for under-18 accounts need guardian consent");
+  }
 };
 const gameId = (req: FastifyRequest) => idParam.parse(req.params).id;
 
 export function registerPickup(app: FastifyInstance, db: Db) {
+  const adultsOnly = needsGuardianConsent(db);
   app.post("/api/v1/pickup", { config: { access: { action: "pickup:host" } } }, async (req, reply) => {
-    adultsOnly(req);
+    await adultsOnly(req);
     return reply.status(201).send(await createGame(db, req.user!.id, newGame.parse(req.body)));
   });
 
@@ -36,7 +40,7 @@ export function registerPickup(app: FastifyInstance, db: Db) {
   app.get("/api/v1/pickup/:id", { config: { access: "public" } }, async (req) => getGame(db, gameId(req), req.user?.id ?? null));
 
   app.post("/api/v1/pickup/:id/rsvp", { config: { access: "authenticated" } }, async (req) => {
-    adultsOnly(req);
+    await adultsOnly(req);
     return rsvp(db, gameId(req), req.user!.id);
   });
   app.delete("/api/v1/pickup/:id/rsvp", { config: { access: "authenticated" } }, async (req) => cancelRsvp(db, gameId(req), req.user!.id));
