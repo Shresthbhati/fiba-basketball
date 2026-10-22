@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import { grantRole } from "../authz/service.js";
 import type { Db } from "../db/index.js";
 import { competitionTeams, competitions, matchResultLog, matches, teams } from "../db/schema.js";
@@ -29,6 +29,15 @@ export async function createCompetition(db: Db, userId: string, input: { name: s
   const [c] = await db.insert(competitions).values({ name: input.name, format: input.format, organizerId: userId }).returning();
   await grantRole(db, userId, "ORGANIZER", { type: "competition", id: c!.id });
   return c!;
+}
+
+/** Published competitions are public; drafts appear only to the person who created them. */
+export async function listCompetitions(db: Db, userId: string | null) {
+  const visible = userId
+    ? or(sql`${competitions.status} <> 'DRAFT'`, eq(competitions.organizerId, userId))
+    : sql`${competitions.status} <> 'DRAFT'`;
+  const rows = await db.select().from(competitions).where(visible).orderBy(desc(competitions.createdAt)).limit(100);
+  return rows.map((c) => ({ id: c.id, name: c.name, format: c.format, status: c.status, mine: c.organizerId === userId }));
 }
 
 export async function getCompetition(db: Db, id: string) {

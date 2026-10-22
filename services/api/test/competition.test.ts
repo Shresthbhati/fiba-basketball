@@ -105,6 +105,22 @@ describe("competitions", () => {
     expect((await get(t, `/api/v1/competitions/${comp.id}/matches`)).statusCode).toBe(200); // published is public
   });
 
+  it("lists published competitions to everyone and drafts only to their creator", async () => {
+    const t = await testApp();
+    const org = await user(t, "org@example.com");
+    const other = await user(t, "other@example.com");
+    const { comp: published } = await league(t, org, "ROUND_ROBIN", ["A", "B"]);
+    await post(t, org, `/api/v1/competitions/${published.id}/schedule`);
+    const draft = (await post(t, org, "/api/v1/competitions", { name: "Secret draft", format: "ROUND_ROBIN" })).json();
+
+    const names = async (u?: U) => (await get(t, "/api/v1/competitions", u)).json().items.map((c: { name: string }) => c.name);
+    expect(await names()).toEqual(["Summer Cup"]);
+    expect(await names(other)).toEqual(["Summer Cup"]);
+    expect((await names(org)).sort()).toEqual(["Secret draft", "Summer Cup"]);
+    const mine = (await get(t, "/api/v1/competitions", org)).json().items.find((c: { id: string }) => c.id === draft.id);
+    expect(mine).toMatchObject({ mine: true, status: "DRAFT" });
+  });
+
   it("requires 2+ teams, rejects duplicate registration, and blocks minors from organizing", async () => {
     const t = await testApp();
     const org = await user(t, "org@example.com");

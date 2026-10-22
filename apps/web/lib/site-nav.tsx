@@ -17,6 +17,7 @@ export function SiteNav() {
       <Link href="/"><strong>COURT IQ</strong></Link>
       <Link href="/courts">Courts</Link>
       <Link href="/pickup">Pickup</Link>
+      <Link href="/competitions">Competitions</Link>
       <span style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
         <SyncIndicator />
         {user ? (
