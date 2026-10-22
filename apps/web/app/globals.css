@@ -1,0 +1,6 @@
+:root { --canvas:#0b0d10; --surface:#151a20; --text:#e8ecf1; --muted:#8b95a3; --accent:#ff6a1a; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--canvas); color:var(--text); font-family: system-ui, sans-serif; }
+a { color: var(--accent); }
+main, header { padding: 16px; max-width: 960px; margin: 0 auto; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
