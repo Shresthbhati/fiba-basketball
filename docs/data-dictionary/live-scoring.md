@@ -10,6 +10,7 @@ API
   - If `baseVersion` is older than events entered by someone else, nothing is written and the response is 409 problem+json with `currentVersion`, `state`, `newerEvents`. The client reconciles and resends with the new `baseVersion`. A scorer's own events never conflict.
   - Validation failures (422) roll back the whole batch.
   - The first accepted event moves the match SCHEDULED → LIVE. Finished/locked matches refuse events (409).
+- `GET /api/v1/matches/:id` returns team names, competition name and scheduled time (the scorer page shows them; they are cosmetic, so offline it falls back to Home/Away and a locally cached copy).
 - `GET /api/v1/matches/:id/state`, `GET /matches/:id/events?after=<version>`: public once the competition is published.
 - `GET /api/v1/matches/:id/stream`: Server-Sent Events, envelope `{ id, schemaVersion: 1, resourceId, resourceVersion, occurredAt, type: "match.state.updated", data }`.
   Messages are hints: after a reconnect, refetch `/state`. The bus is in-process; multiple API instances need Redis pub/sub.
