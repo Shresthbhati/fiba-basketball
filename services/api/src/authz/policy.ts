@@ -3,7 +3,7 @@ import type { Role } from "../identity/role.js";
 // Deny by default: an action not listed here is allowed for nobody except PLATFORM_ADMIN.
 // Add new actions here as modules land.
 export const POLICY = {
-  "competition:create": ["ORGANIZER", "ORG_ADMIN"],
+  "competition:create": ["PLAYER", "COACH", "ORGANIZER", "ORG_ADMIN"],
   "competition:manage": ["ORGANIZER", "ORG_ADMIN"],
   "match:score": ["SCOREKEEPER", "REFEREE", "ORGANIZER"],
   "team:manage": ["COACH", "TEAM_MANAGER", "ORG_ADMIN"],

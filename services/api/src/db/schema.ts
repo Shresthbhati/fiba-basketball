@@ -95,3 +95,62 @@ export const pickupParticipants = pgTable(
   },
   (t) => [primaryKey({ columns: [t.gameId, t.userId] })],
 );
+
+export const teams = pgTable("teams", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const competitions = pgTable("competitions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  organizerId: uuid("organizer_id").notNull().references(() => users.id),
+  format: text("format").notNull(), // ROUND_ROBIN | SINGLE_ELIMINATION
+  status: text("status").notNull().default("DRAFT"), // DRAFT | PUBLISHED | COMPLETED
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const competitionTeams = pgTable(
+  "competition_teams",
+  {
+    competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id),
+    seed: integer("seed"),
+    registeredAt: timestamp("registered_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.competitionId, t.teamId] })],
+);
+
+export const matches = pgTable(
+  "matches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+    round: integer("round").notNull(),
+    slot: integer("slot").notNull(),
+    homeTeamId: uuid("home_team_id").references(() => teams.id),
+    awayTeamId: uuid("away_team_id").references(() => teams.id),
+    state: text("state").notNull().default("SCHEDULED"), // SCHEDULED | LIVE | FINISHED | LOCKED
+    isBye: boolean("is_bye").notNull().default(false),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    homeScore: integer("home_score"),
+    awayScore: integer("away_score"),
+    forfeit: boolean("forfeit").notNull().default(false),
+    nextMatchId: uuid("next_match_id"),
+    nextSide: text("next_side"), // home | away
+  },
+  (t) => [index("matches_competition_idx").on(t.competitionId)],
+);
+
+// Append-only: every entered or corrected result is kept.
+export const matchResultLog = pgTable("match_result_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  homeScore: integer("home_score").notNull(),
+  awayScore: integer("away_score").notNull(),
+  forfeit: boolean("forfeit").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+});
