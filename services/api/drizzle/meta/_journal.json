@@ -22,6 +22,20 @@
       "when": 1792694756736,
       "tag": "0002_familiar_doomsday",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792696402608,
+      "tag": "0003_redundant_scrambler",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792696854080,
+      "tag": "0004_mighty_scorpion",
+      "breakpoints": true
     }
   ]
 }

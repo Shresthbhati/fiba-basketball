@@ -7,7 +7,7 @@ import { can } from "./service.js";
 export type Access =
   | "public"
   | "authenticated"
-  | { action: Action; resource?: (req: FastifyRequest) => ResourceRef | undefined; hide?: boolean };
+  | { action: Action; resource?: (req: FastifyRequest) => ResourceRef | undefined | Promise<ResourceRef | undefined>; hide?: boolean };
 
 declare module "fastify" {
   interface FastifyContextConfig {
@@ -30,7 +30,7 @@ export function enforceAccess(app: FastifyInstance, db: Db) {
     const pre = async (req: FastifyRequest) => {
       if (!req.user) throw new AuthError(401, "Not signed in");
       if (access === "authenticated") return;
-      const ok = await can(db, req.user.id, access.action, access.resource?.(req));
+      const ok = await can(db, req.user.id, access.action, await access.resource?.(req));
       if (!ok) throw new AuthError(access.hide ? 404 : 403, access.hide ? "Not Found" : "Forbidden");
     };
     const existing = route.preHandler;

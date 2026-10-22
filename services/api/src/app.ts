@@ -5,6 +5,9 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import type { Db } from "./db/index.js";
 import { enforceAccess } from "./authz/guard.js";
+import { MatchBus } from "./match/bus.js";
+import { registerMatchScoring } from "./match/routes.js";
+import { registerCompetitions } from "./competition/routes.js";
 import { registerCourts } from "./court/routes.js";
 import { registerPickup } from "./pickup/routes.js";
 import { registerIdentity } from "./identity/routes.js";
@@ -44,6 +47,8 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
 
   registerCourts(app, db);
   registerPickup(app, db);
+  registerCompetitions(app, db);
+  registerMatchScoring(app, db, new MatchBus());
 
   app.get("/health", async () => ({ status: "UP" }));
   return app;
