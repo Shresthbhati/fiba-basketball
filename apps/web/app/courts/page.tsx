@@ -15,18 +15,41 @@ export default function Courts() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function search(e?: FormEvent) {
+  async function search(e?: FormEvent, at?: { lat: string; lng: string }) {
     e?.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      const r = await api<{ items: Court[] }>(`/courts/nearby?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&radius_m=${radius}`);
+      const r = await api<{ items: Court[] }>(`/courts/nearby?lat=${encodeURIComponent(at?.lat ?? lat)}&lng=${encodeURIComponent(at?.lng ?? lng)}&radius_m=${radius}`);
       setCourts(r.items);
     } catch (err) {
       setCourts(null);
       setError(err instanceof ApiError ? err.message : "Could not reach the server.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function addCourt(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const f = new FormData(form);
+    setError(null);
+    try {
+      await api("/courts", {
+        method: "POST",
+        body: {
+          name: f.get("name"), lat: Number(f.get("lat")), lng: Number(f.get("lng")), indoor: f.get("indoor") === "on",
+          ...(f.get("surface") ? { surface: f.get("surface") } : {}), ...(f.get("hoops") ? { hoops: Number(f.get("hoops")) } : {}),
+        },
+      });
+      const at = { lat: String(f.get("lat")), lng: String(f.get("lng")) };
+      setLat(at.lat);
+      setLng(at.lng);
+      form.reset();
+      await search(undefined, at);
+    } catch (err) {
+      setError(err instanceof ApiError ? (err.status === 401 ? "Log in to add a court." : err.message) : "Could not reach the server.");
     }
   }
 
@@ -53,6 +76,19 @@ export default function Courts() {
         <button type="submit" disabled={loading}>{loading ? "Searching…" : "Search"}</button>
       </form>
       {error && <p role="alert" style={{ color: "#ff6b6b" }}>{error}</p>}
+      <details style={{ margin: "16px 0" }}>
+        <summary>Add a court that isn't listed</summary>
+        <form onSubmit={addCourt} aria-label="Add a court" style={{ display: "grid", gap: 12, maxWidth: 420, marginTop: 12 }}>
+          <label>Court name<input name="name" required maxLength={120} /></label>
+          <label>Latitude<input name="lat" inputMode="decimal" required /></label>
+          <label>Longitude<input name="lng" inputMode="decimal" required /></label>
+          <label>Surface (optional)<input name="surface" maxLength={60} placeholder="asphalt, wood…" /></label>
+          <label>Number of hoops (optional)<input name="hoops" type="number" min={1} max={40} /></label>
+          <label style={{ display: "flex", gap: 8, alignItems: "center" }}><input name="indoor" type="checkbox" /> Indoor</label>
+          <small>New courts show as unverified until a moderator or the community confirms them.</small>
+          <button type="submit">Add court</button>
+        </form>
+      </details>
       {courts && courts.length === 0 && <p>No courts found within that radius. Try a larger radius or add a court.</p>}
       {courts && courts.length > 0 && (
         <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>

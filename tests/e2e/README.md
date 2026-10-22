@@ -19,4 +19,4 @@ pnpm e2e
 
 `CHROMIUM_PATH` points at an existing Chromium binary if you can't download one. `E2E_BASE_URL` overrides `http://localhost:3000`.
 
-Covered: sign up, create a competition, add teams, create the schedule, score offline then reconnect and sync, reload, finish the game, public standings, and a stranger not seeing a draft.
+Covered: sign up, add a court, host a pickup game, join / waitlist / leave (waitlist promotes) / check in / roster privacy, create a competition, add teams, schedule, score offline then reconnect and sync, reload, finish the game, public standings, and drafts being hidden from strangers.
