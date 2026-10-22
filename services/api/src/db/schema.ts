@@ -154,3 +154,22 @@ export const matchResultLog = pgTable("match_result_log", {
   forfeit: boolean("forfeit").notNull(),
   recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// The scorebook: an append-only log. The id is chosen by the client so retries are idempotent.
+export const matchEvents = pgTable(
+  "match_events",
+  {
+    id: uuid("id").primaryKey(),
+    matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+    serverSeq: integer("server_seq").notNull(),
+    localSeq: integer("local_seq").notNull(),
+    type: text("type").notNull(),
+    side: text("side"), // home | away
+    period: integer("period").notNull(),
+    clockSeconds: integer("clock_seconds"),
+    correctsEventId: uuid("corrects_event_id"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("match_events_match_idx").on(t.matchId, t.serverSeq)],
+);
