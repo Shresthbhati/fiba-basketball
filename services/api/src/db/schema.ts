@@ -1,4 +1,4 @@
-import { boolean, date, doublePrecision, index, integer, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, doublePrecision, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -186,4 +186,68 @@ export const authTokens = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("auth_tokens_user_idx").on(t.userId, t.purpose)],
+);
+
+// ---- Strength & conditioning ("Train"). See docs/data-dictionary/training.md ----
+
+// Reference data. `reviewed` stays false until a qualified human has signed the content off.
+export const exercises = pgTable("exercises", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  // STRENGTH | POWER | PLYOMETRIC | SPEED_AGILITY | CONDITIONING | MOBILITY | CORE
+  category: text("category").notNull(),
+  equipment: jsonb("equipment").$type<string[]>().notNull().default([]),
+  cues: text("cues").notNull().default(""),
+  safetyNotes: text("safety_notes").notNull().default(""),
+  reviewed: boolean("reviewed").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// PRIVATE to the owner: anyone else gets 404.
+export const workoutSessions = pgTable(
+  "workout_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    notes: text("notes"),
+    sessionRpe: integer("session_rpe"), // 1-10, athlete-reported
+  },
+  (t) => [index("workout_sessions_user_idx").on(t.userId, t.startedAt)],
+);
+
+export const exerciseSets = pgTable(
+  "exercise_sets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id").notNull().references(() => workoutSessions.id, { onDelete: "cascade" }),
+    exerciseId: uuid("exercise_id").notNull().references(() => exercises.id),
+    setNumber: integer("set_number").notNull(),
+    reps: integer("reps").notNull(),
+    loadKg: numeric("load_kg", { precision: 6, scale: 2 }),
+    rpe: integer("rpe"), // 1-10
+    restSeconds: integer("rest_seconds"),
+    clientId: uuid("client_id").notNull().unique(), // chosen by the device, so retries are idempotent
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("exercise_sets_session_idx").on(t.sessionId), index("exercise_sets_exercise_idx").on(t.exerciseId)],
+);
+
+// SENSITIVE, optional, private to the owner. One check-in per user per day.
+export const wellnessChecks = pgTable(
+  "wellness_checks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    date: date("date", { mode: "string" }).notNull(),
+    fatigue: integer("fatigue"), // 1-5
+    soreness: integer("soreness"), // 1-5
+    sleepHours: numeric("sleep_hours", { precision: 4, scale: 1 }),
+    painReported: boolean("pain_reported").notNull().default(false),
+    painNote: text("pain_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("wellness_user_date_uq").on(t.userId, t.date)],
 );

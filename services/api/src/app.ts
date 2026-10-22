@@ -9,6 +9,7 @@ import { MatchBus } from "./match/bus.js";
 import { registerMatchScoring } from "./match/routes.js";
 import { registerCompetitions } from "./competition/routes.js";
 import { registerCourts } from "./court/routes.js";
+import { registerTraining } from "./training/routes.js";
 import { registerPickup } from "./pickup/routes.js";
 import { ConsoleMailer, type Mailer } from "./identity/mailer.js";
 import { registerIdentity } from "./identity/routes.js";
@@ -50,6 +51,7 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerCourts(app, db);
   registerPickup(app, db);
   registerCompetitions(app, db);
+  registerTraining(app, db);
   registerMatchScoring(app, db, new MatchBus());
 
   app.get("/health", async () => ({ status: "UP" }));
