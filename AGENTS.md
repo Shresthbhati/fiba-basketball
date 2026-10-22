@@ -20,10 +20,10 @@ Locked decisions: `docs/adr/`. Change a decision only through a new ADR, never s
 - Output injury probability anywhere (ADR-009).
 
 ## Conventions
-- Java base package `com.courtiq`; npm scope `@courtiq`. Shared kernel in `com.courtiq.shared`:
-  UUIDv7 IDs, `Auditable`, `ResourceRef`, `Visibility`, `VerificationStatus`,
+- Backend is TypeScript (ADR-0011); npm scope `@courtiq`. Shared kernel in `services/api/src/shared`:
+  UUIDv7 IDs, `Visibility`, `VerificationStatus`, `ResourceRef`,
   `SourceType {OFFICIAL, SENSOR, CV_ESTIMATE, COACH, SELF_REPORTED, MODEL_INFERENCE}`.
-- Modules communicate only via another module's public `*Api` interface or published events (Spring Modulith verifies).
-- Every controller method calls `AuthorizationService.can(...)` (ArchUnit-enforced); unauthorized private resources return 404.
+- Modules communicate only via another module's `index.ts` exports or published events.
+- Every controller method calls `AuthorizationService.can(...)` (enforced by a route-registry test); unauthorized private resources return 404.
 - REST under `/api/v1`, RFC 9457 problem+json, cursor pagination, `Idempotency-Key` on retryable POSTs, `If-Match` for concurrency.
-- Flyway only (`V{n}__{module}_{desc}.sql`); no `ddl-auto`.
+- SQL migrations only, named `V{n}__{module}_{desc}.sql`; no auto-sync of schema.

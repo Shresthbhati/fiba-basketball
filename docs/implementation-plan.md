@@ -152,3 +152,7 @@ CV: eval numbers recorded per model/protocol version; release-gate thresholds se
 - Legal review: minors policy, health-data jurisdiction, media consent copy, rule-set licensing.
 - Source & licence of exercise demo media and CV evaluation clips.
 - Populate `docs/product-vision/court-iq-master-spec.md` (currently a placeholder).
+
+## 7. Amendment — ADR-0011 (TypeScript backend)
+The owner dropped Java. Wherever this plan says Spring/Java/Flyway/Modulith/ArchUnit/springdoc, read the ADR-0011 translation.
+Module code lives in `services/api/src/<module>/`. Phase 0 status: WP-0.1 and the API part of WP-0.2 done (health, request-id, problem+json, config, MatchState/EventType/Role ported).
