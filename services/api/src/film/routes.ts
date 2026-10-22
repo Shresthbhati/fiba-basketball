@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/index.js";
+import { can } from "../authz/service.js";
 import { AuthError } from "../identity/service.js";
 import { TooLargeError, type MediaStorage } from "../media/storage.js";
 import {
@@ -31,7 +32,10 @@ export function registerFilm(app: FastifyInstance, db: Db, storage: MediaStorage
 
   app.get("/api/v1/me/teams", { config: { access: "authenticated" } }, async (req) => ({ items: await myTeams(db, req.user!.id) }));
 
-  app.get("/api/v1/teams/:id/members", { config: { access: view } }, async (req) => ({ items: await listMembers(db, idParam.parse(req.params).id) }));
+  app.get("/api/v1/teams/:id/members", { config: { access: view } }, async (req) => {
+    const id = idParam.parse(req.params).id;
+    return { items: await listMembers(db, id), canManage: await can(db, req.user!.id, "film:manage", { type: "team", id }) };
+  });
   app.post("/api/v1/teams/:id/members", { config: { access: manageTeam } }, async (req, reply) => {
     const body = z.object({ email: z.email(), role: z.enum(TEAM_ROLES) }).parse(req.body);
     return reply.status(201).send(await addMember(db, req.user!.id, idParam.parse(req.params).id, body.email, body.role));
@@ -50,7 +54,10 @@ export function registerFilm(app: FastifyInstance, db: Db, storage: MediaStorage
     }).parse(req.body);
     return reply.status(201).send(await createGame(db, req.user!.id, idParam.parse(req.params).id, body));
   });
-  app.get("/api/v1/film/games/:id", { config: { access: viewGame } }, async (req) => readGame(db, idParam.parse(req.params).id));
+  app.get("/api/v1/film/games/:id", { config: { access: viewGame } }, async (req) => {
+    const game = await readGame(db, idParam.parse(req.params).id);
+    return { ...game, canManage: await can(db, req.user!.id, "film:manage", { type: "team", id: game.teamId }) };
+  });
 
   app.put("/api/v1/film/games/:id/video", { config: { access: manageGame } }, async (req, reply) => {
     const g = (await findGame(db, idParam.parse(req.params).id))!;

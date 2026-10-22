@@ -44,7 +44,9 @@ describe("team film (WP-3.1 slice)", () => {
   it("team members see the game; non-members and anonymous users get 404/401", async () => {
     const t = await setup();
     const w = await world(t);
-    expect((await call(t, w.player, "GET", `/api/v1/film/games/${w.gameId}`)).statusCode).toBe(200);
+    expect((await call(t, w.player, "GET", `/api/v1/film/games/${w.gameId}`)).json().canManage).toBe(false);
+    expect((await call(t, w.coachU, "GET", `/api/v1/film/games/${w.gameId}`)).json().canManage).toBe(true);
+    expect((await call(t, w.player, "GET", `/api/v1/teams/${w.teamId}/members`)).json().canManage).toBe(false);
     expect((await call(t, w.player, "GET", `/api/v1/teams/${w.teamId}/games`)).json().items).toHaveLength(1);
     expect((await call(t, w.outsider, "GET", `/api/v1/film/games/${w.gameId}`)).statusCode).toBe(404);
     expect((await call(t, w.outsider, "GET", `/api/v1/teams/${w.teamId}/games`)).statusCode).toBe(404);
