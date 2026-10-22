@@ -12,7 +12,7 @@ import { registerCourts } from "./court/routes.js";
 import { registerPickup } from "./pickup/routes.js";
 import { registerIdentity } from "./identity/routes.js";
 
-export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean } = {}): Promise<FastifyInstance> {
+export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[] } = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: false,
     genReqId: (req) => (req.headers["x-request-id"] as string | undefined) ?? randomUUID(),
@@ -43,7 +43,7 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   });
 
   enforceAccess(app, db);
-  registerIdentity(app, db, { secureCookies: opts.secureCookies ?? true });
+  registerIdentity(app, db, { secureCookies: opts.secureCookies ?? true, allowedOrigins: opts.allowedOrigins ?? [] });
 
   registerCourts(app, db);
   registerPickup(app, db);

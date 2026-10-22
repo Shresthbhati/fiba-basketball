@@ -7,3 +7,6 @@ Status: Accepted
 - Sessions live in the Postgres `sessions` table (token stored as SHA-256 hash) instead of Redis, to cut a moving part for v1. Redis stays optional for rate limits/cache later (amends ADR-0010).
 - CSRF: SameSite=Lax cookie + Origin-must-match-Host check on mutating requests.
 - Passwords: Argon2id (`@node-rs/argon2`). Under-13 signup rejected; 13–17 flagged `isMinor`.
+
+## Amendment: CSRF origin list
+When the web app proxies `/api` to the API, the proxy rewrites `Host` while the browser's `Origin` stays the web origin, so a plain Origin-equals-Host check rejects every real browser write. The API now takes `ALLOWED_ORIGINS` (comma separated); when set, only those origins may make state-changing requests, and when unset it falls back to Origin == Host. Found by the Playwright test against the real stack.

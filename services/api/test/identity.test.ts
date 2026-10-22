@@ -66,6 +66,20 @@ describe("identity", () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it("accepts a listed web origin even when a proxy rewrote Host, and still blocks unlisted origins", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const base = await testApp();
+    const app = await buildApp(base.db, { secureCookies: false, allowedOrigins: ["http://localhost:3000"] });
+    const post = (origin: string) => app.inject({
+      method: "POST", url: "/api/v1/auth/signup", payload: adultBody({ email: `${Math.random()}@example.com` }),
+      headers: { origin, host: "localhost:3001" },
+    });
+    expect((await post("http://localhost:3000")).statusCode).toBe(201);
+    expect((await post("http://localhost:3000/")).statusCode).toBe(201);
+    expect((await post("https://evil.example")).statusCode).toBe(403);
+    expect((await post("not a url")).statusCode).toBe(403);
+  });
+
   it("rate-limits repeated auth attempts", async () => {
     const { app } = await testApp();
     let last = 0;

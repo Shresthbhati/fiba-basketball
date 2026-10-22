@@ -4,7 +4,7 @@ import { can } from "../authz/service.js";
 import type { Db } from "../db/index.js";
 import { AuthError } from "../identity/service.js";
 import {
-  competitionStandings, createCompetition, createTeam, generateSchedule, getMatch, getTeam, listMatches, listTeams,
+  competitionStandings, createCompetition, listCompetitions, createTeam, generateSchedule, getMatch, getTeam, listMatches, listTeams,
   lockMatch, recordResult, registerTeam, visibleCompetition,
 } from "./service.js";
 
@@ -36,6 +36,10 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
     const body = z.object({ name: z.string().trim().min(1).max(100), format: z.enum(["ROUND_ROBIN", "SINGLE_ELIMINATION"]) }).parse(req.body);
     return reply.status(201).send(await createCompetition(db, req.user!.id, body));
   });
+
+  app.get("/api/v1/competitions", { config: { access: "public" } }, async (req) => ({
+    items: await listCompetitions(db, req.user?.id ?? null),
+  }));
 
   app.get("/api/v1/competitions/:id", { config: { access: "public" } }, async (req) => {
     const cid = compId(req);
