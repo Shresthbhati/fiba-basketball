@@ -10,9 +10,11 @@ COPY apps/web/package.json apps/web/
 COPY services/api/package.json services/api/
 RUN pnpm install --frozen-lockfile --filter @courtiq/web...
 COPY apps/web apps/web
-RUN pnpm --filter @courtiq/web build \
+# Tests import the API source, which is not in this image, and Next type-checks every file in tsconfig `include`.
+RUN rm -rf apps/web/test \
+ && pnpm --filter @courtiq/web build \
  && pnpm --filter @courtiq/web deploy --legacy --prod /out \
- && cp -r apps/web/.next /out/.next && rm -rf /out/.next/cache /out/test /out/lib /out/app
+ && cp -r apps/web/.next /out/.next && rm -rf /out/.next/cache /out/lib /out/app
 
 FROM node:22-slim
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
