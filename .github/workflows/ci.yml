@@ -38,6 +38,8 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      # The film test generates a tiny real webm with ffmpeg (not preinstalled on the runner).
+      - run: sudo apt-get install -y --no-install-recommends ffmpeg
       - run: pnpm --filter @courtiq/web build
       - name: Start API and web
         run: |
