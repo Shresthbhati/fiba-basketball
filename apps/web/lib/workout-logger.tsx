@@ -128,9 +128,9 @@ export function WorkoutLogger({ sessionId, queue: injected }: { sessionId: strin
             <details>
               <summary>Cues and safety</summary>
               <p>{current.cues}</p><p>{current.safetyNotes}</p>
-              {!current.reviewed && <p style={{ color: "var(--muted)" }}>Awaiting expert review — treat these notes as general guidance only.</p>}
             </details>
           )}
+          {current && !current.reviewed && <small style={{ color: "var(--muted)" }}>Awaiting expert review — treat this exercise's notes as general guidance only.</small>}
           {suggestion && (
             <p role="note" aria-label="Suggestion" style={{ margin: 0, color: suggestion.action === "HOLD" && suggestion.explanation.startsWith("You reported pain") ? "#ffb347" : "var(--text)" }}>
               <strong>{suggestion.action === "INCREASE" ? `Suggestion: try ${suggestion.suggestedLoadKg} kg. ` : suggestion.action === "DECREASE" ? `Suggestion: drop to ${suggestion.suggestedLoadKg} kg. ` : "Suggestion: "}</strong>

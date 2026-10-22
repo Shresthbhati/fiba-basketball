@@ -3,7 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 // The API must run with MAIL_OUTBOX_DIR pointing at this directory (FileMailer writes each email as JSON).
-const OUTBOX = process.env.MAIL_OUTBOX_DIR ?? "/tmp/claude-0/e1-outbox";
+const OUTBOX = process.env.MAIL_OUTBOX_DIR ?? "/tmp/courtiq-outbox";
 const run = Date.now().toString(36);
 const OLD = "correct-horse-battery";
 const NEW = "another-long-passphrase";
