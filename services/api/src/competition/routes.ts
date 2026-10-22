@@ -5,7 +5,7 @@ import type { Db } from "../db/index.js";
 import { AuthError } from "../identity/service.js";
 import {
   competitionStandings, createCompetition, listCompetitions, createTeam, generateSchedule, getMatch, getTeam, listMatches, listTeams,
-  lockMatch, recordResult, registerTeam, visibleCompetition,
+  lockMatch, matchDetail, recordForfeit, recordResult, setMatchTime, registerTeam, visibleCompetition,
 } from "./service.js";
 
 const id = z.object({ id: z.uuid() });
@@ -70,6 +70,23 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
     await visibleCompetition(db, cid, manager);
     return { items: await competitionStandings(db, cid) };
   });
+
+  const manageMatch = { action: "competition:manage", hide: true, resource: matchRef } as const;
+
+  /** Public once the competition is published, like /matches/:id/state. */
+  app.get("/api/v1/matches/:id", { config: { access: "public" } }, async (req) => {
+    const m = await getMatch(db, compId(req));
+    const manager = req.user ? await can(db, req.user.id, "competition:manage", { type: "competition", id: m.competitionId }) : false;
+    await visibleCompetition(db, m.competitionId, manager);
+    return matchDetail(db, m.id);
+  });
+  app.patch("/api/v1/matches/:id", { config: { access: manageMatch } }, async (req) => {
+    const body = z.object({ scheduledAt: z.iso.datetime({ offset: true }).nullable() }).parse(req.body);
+    return setMatchTime(db, compId(req), body.scheduledAt === null ? null : new Date(body.scheduledAt));
+  });
+  app.post("/api/v1/matches/:id/forfeit", { config: { access: manageMatch } }, async (req) =>
+    recordForfeit(db, compId(req), req.user!.id, z.object({ winner: z.enum(["home", "away"]) }).parse(req.body).winner),
+  );
 
   const score = { action: "match:score", hide: true, resource: matchRef } as const;
   app.post("/api/v1/matches/:id/result", { config: { access: score } }, async (req) =>
