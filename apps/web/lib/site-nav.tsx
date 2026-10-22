@@ -1,0 +1,36 @@
+"use client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { ApiError, api, type Me } from "./api";
+import { SyncIndicator } from "./sync-indicator";
+
+export function SiteNav() {
+  const qc = useQueryClient();
+  const me = useQuery({
+    queryKey: ["me"],
+    queryFn: () => api<Me>("/me").catch((e) => { if (e instanceof ApiError && e.status === 401) return null; throw e; }),
+    retry: false,
+  });
+  const user = me.data;
+  return (
+    <header style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+      <Link href="/"><strong>COURT IQ</strong></Link>
+      <Link href="/courts">Courts</Link>
+      <Link href="/pickup">Pickup</Link>
+      <span style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
+        <SyncIndicator />
+        {user ? (
+          <>
+            <span>{user.displayName}</span>
+            <button className="secondary" style={{ minHeight: 36, padding: "4px 12px" }} onClick={async () => {
+              await api("/auth/logout", { method: "POST" });
+              await qc.invalidateQueries({ queryKey: ["me"] });
+            }}>Log out</button>
+          </>
+        ) : me.isSuccess ? (
+          <><Link href="/login">Log in</Link><Link href="/signup">Sign up</Link></>
+        ) : null}
+      </span>
+    </header>
+  );
+}

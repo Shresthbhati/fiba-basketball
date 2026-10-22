@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { SyncIndicator } from "../lib/sync-indicator";
+import { SiteNav } from "../lib/site-nav";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -10,9 +10,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body>
         <Providers>
-          <header>
-            <strong>COURT IQ</strong> · <SyncIndicator />
-          </header>
+          <SiteNav />
           {children}
         </Providers>
       </body>

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { ApiError, api } from "../../lib/api";
 
@@ -61,6 +62,7 @@ export default function Courts() {
               <div style={{ color: "var(--muted)" }}>
                 {c.indoor ? "Indoor" : "Outdoor"}{c.surface ? ` · ${c.surface}` : ""}{c.hoops ? ` · ${c.hoops} hoops` : ""} · {c.verificationStatus === "UNVERIFIED" ? "Unverified" : "Verified"}
               </div>
+              <Link href={`/pickup/new?courtId=${c.id}&court=${encodeURIComponent(c.name)}`}>Host a game here</Link>
             </li>
           ))}
         </ul>
