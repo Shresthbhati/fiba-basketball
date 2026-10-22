@@ -43,11 +43,11 @@ test("organizer runs a round-robin: sign up, create, add teams, schedule, score 
   await expect(page.getByRole("heading", { name: "Scorekeeper" })).toBeVisible();
   await expect(page.locator("main").getByRole("status").first()).toContainText("All changes saved");
   await context.setOffline(true);
-  await page.getByLabel("Home +3 points").click();
-  await page.getByLabel("Home +2 points").click();
-  await page.getByLabel("Away +2 points").click();
-  await expect(page.getByLabel("Home").getByText("5")).toBeVisible();
-  await expect(page.getByLabel("Away").getByText("2", { exact: true })).toBeVisible();
+  await page.getByLabel("Reds +3 points").click();
+  await page.getByLabel("Reds +2 points").click();
+  await page.getByLabel("Blues +2 points").click();
+  await expect(page.getByLabel("Reds", { exact: true }).getByText("5")).toBeVisible();
+  await expect(page.getByLabel("Blues", { exact: true }).getByText("2", { exact: true })).toBeVisible();
   await expect(page.locator("main").getByRole("status").first()).toContainText("3 waiting to send");
 
   // Reconnect: the queued events sync on their own.
@@ -57,7 +57,7 @@ test("organizer runs a round-robin: sign up, create, add teams, schedule, score 
 
   // Reload: server state is the source of truth and the score is unchanged.
   await page.reload();
-  await expect(page.getByLabel("Home").getByText("5")).toBeVisible();
+  await expect(page.getByLabel("Reds", { exact: true }).getByText("5")).toBeVisible();
 
   // Finish the game and check the public standings.
   await page.getByRole("button", { name: "Finish game" }).click();
