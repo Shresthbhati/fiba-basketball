@@ -4,6 +4,8 @@ import { permissionsFor } from "../authz/service.js";
 import type { Db } from "../db/index.js";
 import { AuthError, SESSION_TTL_MS, login, logout, signup, userForToken, type PublicUser } from "./service.js";
 
+const safeHost = (origin: string) => { try { return new URL(origin).host; } catch { return null; } };
+
 export const COOKIE = "ciq_session";
 
 const signupBody = z.object({
@@ -20,14 +22,18 @@ declare module "fastify" {
   }
 }
 
-export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCookies: boolean }) {
+export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCookies: boolean; allowedOrigins?: string[] }) {
   app.decorateRequest("user", null);
 
-  // CSRF: browsers always send Origin on cross-site mutations; reject if it isn't our own host.
+  // CSRF: browsers always send Origin on cross-site mutations. When the web app proxies /api to us the Host header
+  // is rewritten, so deployments list their web origin(s) in ALLOWED_ORIGINS; with no list we require Origin to match Host.
+  const allowed = new Set((opts.allowedOrigins ?? []).map((o) => o.replace(/\/$/, "")));
   app.addHook("onRequest", async (req) => {
     if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return;
     const origin = req.headers.origin;
-    if (origin && new URL(origin).host !== req.headers.host) throw new AuthError(403, "Cross-origin request blocked");
+    if (!origin) return;
+    const ok = allowed.size > 0 ? allowed.has(origin.replace(/\/$/, "")) : safeHost(origin) === req.headers.host;
+    if (!ok) throw new AuthError(403, "Cross-origin request blocked");
   });
 
   app.addHook("onRequest", async (req) => {
