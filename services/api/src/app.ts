@@ -15,8 +15,10 @@ import { registerTraining } from "./training/routes.js";
 import { registerPickup } from "./pickup/routes.js";
 import { ConsoleMailer, type Mailer } from "./identity/mailer.js";
 import { registerIdentity } from "./identity/routes.js";
+import { registerConsent } from "./consent/routes.js";
+import { registerTrust } from "./trust/routes.js";
 
-export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[]; mailer?: Mailer; webBaseUrl?: string; rateLimitScale?: number; logger?: boolean; logStream?: { write(msg: string): void } } = {}): Promise<FastifyInstance> {
+export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[]; mailer?: Mailer; webBaseUrl?: string; rateLimitScale?: number; requireVerifiedGuardianEmail?: boolean; logger?: boolean; logStream?: { write(msg: string): void } } = {}): Promise<FastifyInstance> {
   // Structured JSON logs with the request id. Cookies and credentials are redacted and request bodies are never logged.
   const logger = opts.logger || opts.logStream
     ? { level: "info", redact: { paths: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'], censor: "[redacted]" }, ...(opts.logStream ? { stream: opts.logStream } : {}) }
@@ -55,6 +57,8 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerIdentity(app, db, { secureCookies: opts.secureCookies ?? true, allowedOrigins: opts.allowedOrigins ?? [],
     mailer: opts.mailer ?? new ConsoleMailer(), rateLimitScale: opts.rateLimitScale ?? 1, webBaseUrl: (opts.webBaseUrl ?? "http://localhost:3000").replace(/\/$/, "") });
 
+  registerConsent(app, db, { requireVerifiedGuardianEmail: opts.requireVerifiedGuardianEmail ?? true });
+  registerTrust(app, db);
   registerCourts(app, db);
   registerPickup(app, db);
   registerCompetitions(app, db);

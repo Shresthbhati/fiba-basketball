@@ -14,6 +14,7 @@ if (!cfg.DATABASE_URL) throw new Error("DATABASE_URL is required");
 const app = await buildApp(await connect(cfg.DATABASE_URL), {
   logger: true,
   secureCookies: cfg.NODE_ENV === "production",
+  requireVerifiedGuardianEmail: cfg.NODE_ENV === "production",
   rateLimitScale: cfg.RATE_LIMIT_SCALE,
   allowedOrigins: (cfg.ALLOWED_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean),
   mailer: createMailer(cfg),
