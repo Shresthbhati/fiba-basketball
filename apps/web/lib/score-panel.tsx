@@ -8,7 +8,12 @@ const label: Record<string, string> = {
   conflict: "Another scorer changed this game", error: "Could not save — retrying",
 };
 
-export function ScorePanel({ queue, onFinalize }: { queue: ScoreQueue; onFinalize?: () => Promise<void> }) {
+/** Cosmetic match details. Scoring never depends on them; without them the panel says Home/Away. */
+export type MatchInfo = { homeName: string; awayName: string; competitionName?: string; scheduledAt?: string | null };
+
+export function ScorePanel({ queue, onFinalize, info }: { queue: ScoreQueue; onFinalize?: () => Promise<void>; info?: MatchInfo | null }) {
+  const homeName = info?.homeName || "Home";
+  const awayName = info?.awayName || "Away";
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const [period, setPeriod] = useState(queue.serverState.period);
   const [msg, setMsg] = useState<string | null>(null);
@@ -44,6 +49,12 @@ export function ScorePanel({ queue, onFinalize }: { queue: ScoreQueue; onFinaliz
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
+      {info && (
+        <div aria-label="Match details" style={{ color: "var(--muted)" }}>
+          {info.competitionName && <div>{info.competitionName}</div>}
+          {info.scheduledAt && <div>Scheduled for {new Date(info.scheduledAt).toLocaleString()}</div>}
+        </div>
+      )}
       <div role="status" style={{ color: queue.status === "offline" || queue.status === "error" ? "#ffb347" : "var(--muted)" }}>
         {label[queue.status]}{queue.pendingCount > 0 ? ` · ${queue.pendingCount} waiting to send` : ""}
       </div>
@@ -65,8 +76,8 @@ export function ScorePanel({ queue, onFinalize }: { queue: ScoreQueue; onFinaliz
         <button className="secondary" onClick={() => add("PERIOD_START")}>Start period</button>
       </label>
 
-      {team("home", "Home")}
-      {team("away", "Away")}
+      {team("home", homeName)}
+      {team("away", awayName)}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button className="secondary" onClick={() => queue.undoLast(period) && void queue.sync()} disabled={queue.pendingCount === 0}>Undo last</button>
@@ -85,6 +96,28 @@ export function ScorePanel({ queue, onFinalize }: { queue: ScoreQueue; onFinaliz
       {msg && <p role="status">{msg}</p>}
     </div>
   );
+}
+
+type MatchDetailResponse = {
+  competitionName: string; scheduledAt: string | null; home: { name: string } | null; away: { name: string } | null;
+};
+
+/** Fetches team names etc. Returns null on any failure (offline included): the names are cosmetic. */
+export async function loadMatchInfo(matchId: string): Promise<MatchInfo | null> {
+  const cacheKey = `courtiq.matchinfo.${matchId}`;
+  try {
+    const m = await api<MatchDetailResponse>(`/matches/${matchId}`);
+    const info: MatchInfo = {
+      homeName: m.home?.name ?? "Home", awayName: m.away?.name ?? "Away", competitionName: m.competitionName, scheduledAt: m.scheduledAt,
+    };
+    try { localStorage.setItem(cacheKey, JSON.stringify(info)); } catch { /* storage unavailable */ }
+    return info;
+  } catch {
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      return raw ? (JSON.parse(raw) as MatchInfo) : null;
+    } catch { return null; }
+  }
 }
 
 export const finalizeMatch = (matchId: string) => api(`/matches/${matchId}/finalize`, { method: "POST" }).then(() => undefined);

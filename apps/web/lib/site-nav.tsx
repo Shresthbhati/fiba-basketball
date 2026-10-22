@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { ApiError, api, type Me } from "./api";
 import { SyncIndicator } from "./sync-indicator";
+import { VerifyBanner } from "./verify-banner";
 
 export function SiteNav() {
   const qc = useQueryClient();
@@ -13,10 +14,13 @@ export function SiteNav() {
   });
   const user = me.data;
   return (
+    <>
+    {user && !user.emailVerified && <VerifyBanner />}
     <header style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
       <Link href="/"><strong>COURT IQ</strong></Link>
       <Link href="/courts">Courts</Link>
       <Link href="/pickup">Pickup</Link>
+      <Link href="/train">Train</Link>
       <Link href="/competitions">Competitions</Link>
       <span style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
         <SyncIndicator />
@@ -33,5 +37,6 @@ export function SiteNav() {
         ) : null}
       </span>
     </header>
+    </>
   );
 }

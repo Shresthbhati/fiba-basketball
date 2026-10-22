@@ -9,11 +9,12 @@ import { MatchBus } from "./match/bus.js";
 import { registerMatchScoring } from "./match/routes.js";
 import { registerCompetitions } from "./competition/routes.js";
 import { registerCourts } from "./court/routes.js";
+import { registerTraining } from "./training/routes.js";
 import { registerPickup } from "./pickup/routes.js";
 import { ConsoleMailer, type Mailer } from "./identity/mailer.js";
 import { registerIdentity } from "./identity/routes.js";
 
-export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[]; mailer?: Mailer; webBaseUrl?: string } = {}): Promise<FastifyInstance> {
+export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[]; mailer?: Mailer; webBaseUrl?: string; rateLimitScale?: number } = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: false,
     genReqId: (req) => (req.headers["x-request-id"] as string | undefined) ?? randomUUID(),
@@ -45,11 +46,12 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
 
   enforceAccess(app, db);
   registerIdentity(app, db, { secureCookies: opts.secureCookies ?? true, allowedOrigins: opts.allowedOrigins ?? [],
-    mailer: opts.mailer ?? new ConsoleMailer(), webBaseUrl: (opts.webBaseUrl ?? "http://localhost:3000").replace(/\/$/, "") });
+    mailer: opts.mailer ?? new ConsoleMailer(), rateLimitScale: opts.rateLimitScale ?? 1, webBaseUrl: (opts.webBaseUrl ?? "http://localhost:3000").replace(/\/$/, "") });
 
   registerCourts(app, db);
   registerPickup(app, db);
   registerCompetitions(app, db);
+  registerTraining(app, db);
   registerMatchScoring(app, db, new MatchBus());
 
   app.get("/health", async () => ({ status: "UP" }));

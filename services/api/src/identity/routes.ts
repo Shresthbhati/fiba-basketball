@@ -24,7 +24,7 @@ declare module "fastify" {
   }
 }
 
-export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCookies: boolean; allowedOrigins?: string[]; mailer: Mailer; webBaseUrl: string }) {
+export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCookies: boolean; allowedOrigins?: string[]; mailer: Mailer; webBaseUrl: string; rateLimitScale?: number }) {
   app.decorateRequest("user", null);
 
   // CSRF: browsers always send Origin on cross-site mutations. When the web app proxies /api to us the Host header
@@ -48,7 +48,8 @@ export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCoo
       httpOnly: true, sameSite: "lax", secure: opts.secureCookies, path: "/", maxAge: SESSION_TTL_MS / 1000,
     });
 
-  const authLimit = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
+  const scale = Math.max(1, opts.rateLimitScale ?? 1); // production keeps 1; automated browser tests raise it
+  const authLimit = { config: { rateLimit: { max: 10 * scale, timeWindow: "1 minute" } } };
 
   app.post("/api/v1/auth/signup", { ...authLimit, config: { ...authLimit.config, access: "public" } }, async (req, reply) => {
     const body = signupBody.parse(req.body);
@@ -73,7 +74,7 @@ export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCoo
   });
 
   const tokenBody = z.object({ token: z.string().min(20).max(200) });
-  const strict = { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } };
+  const strict = { config: { rateLimit: { max: 5 * scale, timeWindow: "1 minute" } } };
 
   app.post("/api/v1/auth/password-reset/request", { ...strict, config: { ...strict.config, access: "public" } }, async (req, reply) => {
     const { email } = z.object({ email: z.string().min(3).max(320) }).parse(req.body);

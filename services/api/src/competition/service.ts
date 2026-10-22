@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { grantRole } from "../authz/service.js";
 import type { Db } from "../db/index.js";
 import { competitionTeams, competitions, matchResultLog, matches, teams } from "../db/schema.js";
@@ -124,6 +124,40 @@ export async function getMatch(db: Db, id: string) {
   const [m] = await db.select().from(matches).where(eq(matches.id, id));
   if (!m) throw new AuthError(404, "Not Found");
   return m;
+}
+
+/** Public-facing match view: team names and competition name resolved. Visibility is the caller's job. */
+export async function matchDetail(db: Db, id: string) {
+  const m = await getMatch(db, id);
+  const c = await getCompetition(db, m.competitionId);
+  const ids = [m.homeTeamId, m.awayTeamId].filter((x): x is string => !!x);
+  const rows = ids.length ? await db.select({ id: teams.id, name: teams.name }).from(teams).where(inArray(teams.id, ids)) : [];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const side = (tid: string | null) => (tid ? byId.get(tid) ?? null : null);
+  return {
+    id: m.id, competitionId: m.competitionId, competitionName: c.name, round: m.round, slot: m.slot, state: m.state, isBye: m.isBye,
+    scheduledAt: m.scheduledAt ? m.scheduledAt.toISOString() : null,
+    home: side(m.homeTeamId), away: side(m.awayTeamId), homeScore: m.homeScore, awayScore: m.awayScore,
+  };
+}
+
+/** Set or clear the planned start time. Played (or bye) matches keep their time. */
+export async function setMatchTime(db: Db, id: string, scheduledAt: Date | null) {
+  const m = await getMatch(db, id);
+  if (m.isBye) throw new AuthError(409, "Bye matches have no time");
+  if (m.state === "LOCKED" || m.state === "FINISHED") throw new AuthError(409, "A finished match can't be rescheduled");
+  await db.update(matches).set({ scheduledAt }).where(eq(matches.id, id));
+  return matchDetail(db, id);
+}
+
+export const FORFEIT_WINNER_POINTS = 20;
+
+/** The winner is awarded a 20-0 result flagged as a forfeit; same audit log and bracket advancement as any result. */
+export async function recordForfeit(db: Db, id: string, userId: string, winner: "home" | "away") {
+  await recordResult(db, id, userId, {
+    homeScore: winner === "home" ? FORFEIT_WINNER_POINTS : 0, awayScore: winner === "away" ? FORFEIT_WINNER_POINTS : 0, forfeit: true,
+  });
+  return matchDetail(db, id);
 }
 
 export async function recordResult(

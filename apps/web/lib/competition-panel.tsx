@@ -7,6 +7,72 @@ import { formatLabel, stateLabel, statusLabel, type CompetitionDetail, type Matc
 const roundName = (round: number, last: number, knockout: boolean) =>
   !knockout ? `Round ${round}` : round === last ? "Final" : round === last - 1 ? "Semi-finals" : `Round ${round}`;
 
+const toLocalInput = (iso?: string | null) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+type Run = (fn: () => Promise<unknown>, done?: string) => Promise<void>;
+
+/** Organizer-only controls for one match: time, direct score entry/correction, forfeit, lock. */
+function MatchAdmin({ m, home, away, run, busy }: { m: MatchRow; home: string; away: string; run: Run; busy: boolean }) {
+  const [time, setTime] = useState(toLocalInput(m.scheduledAt));
+  const [hs, setHs] = useState(m.homeScore?.toString() ?? "");
+  const [aw, setAw] = useState(m.awayScore?.toString() ?? "");
+  const [forfeiter, setForfeiter] = useState<"home" | "away">("home");
+  const played = m.state === "FINISHED";
+  const url = `/matches/${m.id}`;
+
+  const saveTime = (e: FormEvent) => {
+    e.preventDefault();
+    if (!time) return;
+    void run(() => api(url, { method: "PATCH", body: { scheduledAt: new Date(time).toISOString() } }), "Match time saved.");
+  };
+  const saveScore = (e: FormEvent) => {
+    e.preventDefault();
+    if (hs === "" || aw === "") return;
+    void run(() => api(`${url}/result`, { method: "POST", body: { homeScore: Number(hs), awayScore: Number(aw) } }), played ? "Score corrected." : "Final score saved.");
+  };
+  const forfeit = () => {
+    const loser = forfeiter === "home" ? home : away;
+    if (!window.confirm(`Record a forfeit? ${loser} loses 20-0 and gets 0 table points.`)) return;
+    void run(() => api(`${url}/forfeit`, { method: "POST", body: { winner: forfeiter === "home" ? "away" : "home" } }), "Forfeit recorded.");
+  };
+  const lock = () => {
+    if (!window.confirm("Lock this result? It can't be changed afterwards.")) return;
+    void run(() => api(`${url}/lock`, { method: "POST" }), "Result locked.");
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+      {!played && (
+        <form onSubmit={saveTime} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <input type="datetime-local" aria-label="Match time" value={time} onChange={(e) => setTime(e.target.value)} />
+          <button type="submit" disabled={busy || !time}>Set time</button>
+          {m.scheduledAt && <button type="button" className="secondary" disabled={busy} onClick={() => { setTime(""); void run(() => api(url, { method: "PATCH", body: { scheduledAt: null } }), "Match time cleared."); }}>Clear time</button>}
+        </form>
+      )}
+      <form onSubmit={saveScore} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <input type="number" min={0} max={300} aria-label="Home score" value={hs} onChange={(e) => setHs(e.target.value)} style={{ width: 80 }} />
+        <span>:</span>
+        <input type="number" min={0} max={300} aria-label="Away score" value={aw} onChange={(e) => setAw(e.target.value)} style={{ width: 80 }} />
+        <button type="submit" disabled={busy || hs === "" || aw === ""}>{played ? "Correct score" : "Enter final score"}</button>
+      </form>
+      {!played && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <select aria-label="Team that forfeits" value={forfeiter} onChange={(e) => setForfeiter(e.target.value as "home" | "away")}>
+            <option value="home">{home} forfeits</option><option value="away">{away} forfeits</option>
+          </select>
+          <button type="button" className="secondary" disabled={busy} onClick={forfeit}>Record forfeit</button>
+        </div>
+      )}
+      {played && <div><button type="button" disabled={busy} onClick={lock}>Lock result</button></div>}
+    </div>
+  );
+}
+
 export function CompetitionPanel({ id }: { id: string }) {
   const [comp, setComp] = useState<CompetitionDetail | null>(null);
   const [matches, setMatches] = useState<MatchRow[]>([]);
@@ -110,14 +176,16 @@ export function CompetitionPanel({ id }: { id: string }) {
           <h2>{roundName(r, lastRound, knockout)}</h2>
           <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
             {matches.filter((m) => m.round === r).map((m) => (
-              <li key={m.id} style={{ background: "var(--surface)", padding: 12, borderRadius: 8 }}>
+              <li key={m.id} aria-label={m.isBye ? undefined : `Match ${team(m.homeTeamId)} vs ${team(m.awayTeamId)}`} style={{ background: "var(--surface)", padding: 12, borderRadius: 8 }}>
                 {m.isBye ? (
                   <span>{team(m.homeTeamId ?? m.awayTeamId)} — bye</span>
                 ) : (
                   <>
                     <strong>{team(m.homeTeamId)}</strong> {m.homeScore ?? "–"} : {m.awayScore ?? "–"} <strong>{team(m.awayTeamId)}</strong>
-                    <div style={{ color: "var(--muted)" }}>{stateLabel[m.state]}</div>
+                    <div style={{ color: "var(--muted)" }}>{stateLabel[m.state]}{m.forfeit ? " (forfeit)" : ""}</div>
+                    {m.scheduledAt && <div style={{ color: "var(--muted)" }}>Scheduled for <time dateTime={m.scheduledAt}>{new Date(m.scheduledAt).toLocaleString()}</time></div>}
                     {comp.canManage && m.state !== "LOCKED" && m.homeTeamId && m.awayTeamId && <Link href={`/score/${m.id}`}>{m.state === "FINISHED" ? "Reopen scorer" : "Open scorer"}</Link>}
+                    {comp.canManage && m.homeTeamId && m.awayTeamId && <MatchAdmin key={`${m.state}-${m.homeScore}-${m.awayScore}-${m.scheduledAt}`} m={m} home={team(m.homeTeamId)} away={team(m.awayTeamId)} run={run} busy={busy} />}
                   </>
                 )}
               </li>

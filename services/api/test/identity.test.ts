@@ -89,3 +89,17 @@ describe("identity", () => {
     expect(last).toBe(429);
   });
 });
+
+describe("rate limit scale", () => {
+  it("RATE_LIMIT_SCALE multiplies the auth limit (and 1 keeps today's 10 per minute)", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const base = await testApp();
+    const attempt = (app: Awaited<ReturnType<typeof buildApp>>) =>
+      app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "x@example.com", password: "nope" } });
+    const scaled = await buildApp(base.db, { secureCookies: false, rateLimitScale: 2 });
+    let last = 0;
+    for (let i = 0; i < 20; i++) last = (await attempt(scaled)).statusCode;
+    expect(last).toBe(401); // 20 attempts fit under 10 x 2
+    expect((await attempt(scaled)).statusCode).toBe(429);
+  });
+});
