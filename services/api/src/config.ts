@@ -7,6 +7,7 @@ const schema = z.object({
   WEB_BASE_URL: z.string().optional(),
   ALLOWED_ORIGINS: z.string().optional(),
   REDIS_URL: z.string().optional(),
+  MAIL_OUTBOX_DIR: z.string().optional(),
 });
 
 export type Config = z.infer<typeof schema>;
