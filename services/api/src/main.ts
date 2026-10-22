@@ -1,6 +1,7 @@
 import { buildApp } from "./app.js";
 import { loadConfig, productionProblems } from "./config.js";
 import { connect } from "./db/connect.js";
+import { LocalDiskStorage } from "./media/storage.js";
 import { createMailer } from "./identity/mailer-factory.js";
 
 const cfg = loadConfig();
@@ -18,6 +19,8 @@ const app = await buildApp(await connect(cfg.DATABASE_URL), {
   rateLimitScale: cfg.RATE_LIMIT_SCALE,
   allowedOrigins: (cfg.ALLOWED_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean),
   mailer: createMailer(cfg),
+  storage: new LocalDiskStorage(cfg.MEDIA_DIR ?? "./data/media"),
+  maxVideoBytes: cfg.MAX_VIDEO_MB * 1024 * 1024,
   ...(cfg.WEB_BASE_URL ? { webBaseUrl: cfg.WEB_BASE_URL } : {}),
 });
 await app.listen({ port: cfg.PORT, host: "0.0.0.0" });

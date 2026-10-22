@@ -336,3 +336,38 @@ export const reports = pgTable(
   },
   (t) => [uniqueIndex("reports_one_per_case_idx").on(t.caseId, t.reporterId)],
 );
+
+/** A game's film belongs to one team. Visible only to that team's members (see authz `team:view`). */
+export const filmGames = pgTable(
+  "film_games",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id),
+    title: text("title").notNull(),
+    opponent: text("opponent"),
+    playedOn: date("played_on", { mode: "string" }),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Video is stored outside the database (storage key only). NONE -> READY once the bytes are fully received.
+    videoStatus: text("video_status").notNull().default("NONE"),
+    videoKey: text("video_key"),
+    videoType: text("video_type"),
+    videoBytes: integer("video_bytes"),
+  },
+  (t) => [index("film_games_team_idx").on(t.teamId)],
+);
+
+export const filmClips = pgTable(
+  "film_clips",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gameId: uuid("game_id").notNull().references(() => filmGames.id, { onDelete: "cascade" }),
+    startMs: integer("start_ms").notNull(),
+    endMs: integer("end_ms").notNull(),
+    tags: text("tags").array().notNull().default([]),
+    note: text("note"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("film_clips_game_idx").on(t.gameId)],
+);

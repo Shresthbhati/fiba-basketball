@@ -5,6 +5,22 @@ import { adultBody, cookieOf, testApp } from "./helpers.js";
 
 const comp = { type: "competition", id: randomUUID() };
 
+describe("team-scoped actions", () => {
+  const team = { type: "team", id: "t1" };
+  it("ignore global grants, so the sign-up PLAYER role never opens a team's film", () => {
+    const global = [{ role: "PLAYER" as const, resourceType: null, resourceId: null }];
+    expect(decide(global, "team:view", team)).toBe(false);
+    expect(decide([{ role: "COACH", resourceType: null, resourceId: null }], "film:manage", team)).toBe(false);
+  });
+  it("allow a grant scoped to that team only", () => {
+    const scoped = [{ role: "PLAYER" as const, resourceType: "team", resourceId: "t1" }];
+    expect(decide(scoped, "team:view", team)).toBe(true);
+    expect(decide(scoped, "team:view", { type: "team", id: "t2" })).toBe(false);
+    expect(decide(scoped, "film:manage", team)).toBe(false);
+    expect(decide([{ role: "PLATFORM_ADMIN", resourceType: null, resourceId: null }], "team:view", team)).toBe(true);
+  });
+});
+
 describe("decide (pure policy)", () => {
   it("denies by default and for unrelated roles", () => {
     expect(decide([], "competition:manage")).toBe(false);

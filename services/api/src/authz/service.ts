@@ -2,7 +2,7 @@ import { and, eq, gt, isNull, or } from "drizzle-orm";
 import type { Db } from "../db/index.js";
 import { roleAssignments } from "../db/schema.js";
 import type { Role } from "../identity/role.js";
-import { POLICY, type Action, type ResourceRef } from "./policy.js";
+import { POLICY, SCOPED_ONLY, type Action, type ResourceRef } from "./policy.js";
 
 export type Assignment = { role: Role; resourceType: string | null; resourceId: string | null };
 
@@ -20,7 +20,7 @@ export function decide(assignments: Assignment[], action: Action, resource?: Res
   const allowed = POLICY[action] as readonly Role[];
   return assignments.some((a) => {
     if (!allowed.includes(a.role)) return false;
-    if (a.resourceId === null) return true; // global grant
+    if (a.resourceId === null) return !SCOPED_ONLY.has(action); // global grant
     return resource !== undefined && a.resourceType === resource.type && a.resourceId === resource.id;
   });
 }

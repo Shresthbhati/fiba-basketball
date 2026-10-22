@@ -10,7 +10,7 @@ import { adultBody, testApp } from "./helpers.js";
 
 const prodOk = {
   NODE_ENV: "production", DATABASE_URL: "postgres://db/x", ALLOWED_ORIGINS: "https://app.example.com", WEB_BASE_URL: "https://app.example.com",
-  SMTP_URL: "smtps://user:pass@mail.example.com", MAIL_FROM: "COURT IQ <no-reply@example.com>",
+  MEDIA_DIR: "/var/lib/courtiq/media", SMTP_URL: "smtps://user:pass@mail.example.com", MAIL_FROM: "COURT IQ <no-reply@example.com>",
 };
 
 describe("production config guard", () => {

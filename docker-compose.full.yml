@@ -26,6 +26,7 @@ services:
       WEB_BASE_URL: ${WEB_ORIGIN:-http://localhost:3000}
       SMTP_URL: ${SMTP_URL:-smtp://mailpit:1025}
       MAIL_FROM: ${MAIL_FROM:-COURT IQ <no-reply@localhost>}
+    volumes: ["media:/data/media"]
     ports: ["3001:3001"]
 
   web:
@@ -38,3 +39,4 @@ services:
 
 volumes:
   pgdata:
+  media:
