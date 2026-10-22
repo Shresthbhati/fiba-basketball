@@ -1,10 +1,12 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { ApiError, api } from "./api";
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
+  const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -20,7 +22,8 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           ? { email: f.get("email"), password: f.get("password") }
           : { email: f.get("email"), password: f.get("password"), displayName: f.get("displayName"), dateOfBirth: f.get("dateOfBirth") },
       });
-      router.push("/courts");
+      await qc.invalidateQueries({ queryKey: ["me"] });
+      router.push("/pickup");
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not reach the server. Check your connection and try again.");
