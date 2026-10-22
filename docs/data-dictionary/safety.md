@@ -11,8 +11,7 @@
 ## Rules
 - A guardian is invited by the minor, by email. They accept from their **own signed-in adult account** whose email matches; there is no token to leak.
   An invitation not addressed to the caller answers 404.
-- In production (`NODE_ENV=production`) acceptance also needs `email_verified_at`. Email verification (WP-1.1) is not built, so **no guardianship can complete in production yet**.
-  Minors stay blocked from public pickup until it is. Dev and test run with this check off.
+- In production (`NODE_ENV=production`) acceptance also needs the guardian's email to be verified (`email_verified_at`, set by the verify-email flow). Dev and test run with this check off.
 - A minor's consent counts only while the person who granted it is still an `ACTIVE` guardian of that minor, checked at read time. Revoking the guardian ends every consent they gave, immediately.
   A minor cannot grant consent for themselves but can withdraw it. Adults consent for themselves.
 - Pickup: an under-18 account needs `PUBLIC_PICKUP` to host or RSVP. Nothing changes for adults.

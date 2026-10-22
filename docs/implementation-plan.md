@@ -52,7 +52,7 @@ Backend is TypeScript (ADR-0011); the Java wording in the WP text below is the o
 | Done | WPs |
 |---|---|
 | Foundation | monorepo, API baseline, web baseline, CI (0.1–0.3 partial, 0.6 partial) |
-| Lane A | 1.1 identity (no email verification, reset, or TOTP yet), 1.2 authz, **1.3 consent/guardians/audit**, **1.4 trust and safety (API; no moderator UI)** |
+| Lane A | 1.1 identity (email verification and password reset landed; no admin TOTP yet), 1.2 authz, **1.3 consent/guardians/audit**, **1.4 trust and safety (API; no moderator UI)** |
 | Lane B | 1.5–1.9 teams, competitions, scheduling, live scoring, offline scorekeeper |
 | Lane C | 1.11 courts (no PostGIS, ADR-0013), 1.12 pickup |
 | Next | 1.10 public pages and command center; 0.4 design system, 0.5 contracts, 0.7 ops; email verification; Phase 2 |

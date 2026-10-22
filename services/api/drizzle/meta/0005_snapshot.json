@@ -1,53 +1,40 @@
 {
-  "id": "dc1b868e-f31d-480c-ae74-df7ced2ed729",
+  "id": "2bf41b2c-2ff0-40a1-b985-c8fabf32ad1e",
   "prevId": "b8079ea3-b570-444a-a663-4d6580f6c3d1",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.audit_log": {
-      "name": "audit_log",
+    "public.auth_tokens": {
+      "name": "auth_tokens",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
+          "notNull": true
         },
-        "actor_id": {
-          "name": "actor_id",
+        "user_id": {
+          "name": "user_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "action": {
-          "name": "action",
+        "purpose": {
+          "name": "purpose",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "resource_type": {
-          "name": "resource_type",
-          "type": "text",
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "resource_id": {
-          "name": "resource_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "metadata": {
-          "name": "metadata",
-          "type": "jsonb",
+        "used_at": {
+          "name": "used_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -60,32 +47,17 @@
         }
       },
       "indexes": {
-        "audit_log_resource_idx": {
-          "name": "audit_log_resource_idx",
+        "auth_tokens_user_idx": {
+          "name": "auth_tokens_user_idx",
           "columns": [
             {
-              "expression": "resource_type",
+              "expression": "user_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "resource_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "audit_log_actor_idx": {
-          "name": "audit_log_actor_idx",
-          "columns": [
-            {
-              "expression": "actor_id",
+              "expression": "purpose",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -98,17 +70,17 @@
         }
       },
       "foreignKeys": {
-        "audit_log_actor_id_users_id_fk": {
-          "name": "audit_log_actor_id_users_id_fk",
-          "tableFrom": "audit_log",
+        "auth_tokens_user_id_users_id_fk": {
+          "name": "auth_tokens_user_id_users_id_fk",
+          "tableFrom": "auth_tokens",
           "tableTo": "users",
           "columnsFrom": [
-            "actor_id"
+            "user_id"
           ],
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -243,106 +215,6 @@
           "tableTo": "users",
           "columnsFrom": [
             "organizer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.consent_grants": {
-      "name": "consent_grants",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "subject_id": {
-          "name": "subject_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "granted_by": {
-          "name": "granted_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "granted_at": {
-          "name": "granted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "revoked_at": {
-          "name": "revoked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "consent_subject_idx": {
-          "name": "consent_subject_idx",
-          "columns": [
-            {
-              "expression": "subject_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "kind",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "consent_grants_subject_id_users_id_fk": {
-          "name": "consent_grants_subject_id_users_id_fk",
-          "tableFrom": "consent_grants",
-          "tableTo": "users",
-          "columnsFrom": [
-            "subject_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "consent_grants_granted_by_users_id_fk": {
-          "name": "consent_grants_granted_by_users_id_fk",
-          "tableFrom": "consent_grants",
-          "tableTo": "users",
-          "columnsFrom": [
-            "granted_by"
           ],
           "columnsTo": [
             "id"
@@ -545,128 +417,6 @@
             "id"
           ],
           "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.guardian_relationships": {
-      "name": "guardian_relationships",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "minor_id": {
-          "name": "minor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "guardian_email": {
-          "name": "guardian_email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "guardian_id": {
-          "name": "guardian_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'PENDING'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "verified_at": {
-          "name": "verified_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "revoked_at": {
-          "name": "revoked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "guardian_minor_idx": {
-          "name": "guardian_minor_idx",
-          "columns": [
-            {
-              "expression": "minor_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "guardian_email_idx": {
-          "name": "guardian_email_idx",
-          "columns": [
-            {
-              "expression": "guardian_email",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "guardian_relationships_minor_id_users_id_fk": {
-          "name": "guardian_relationships_minor_id_users_id_fk",
-          "tableFrom": "guardian_relationships",
-          "tableTo": "users",
-          "columnsFrom": [
-            "minor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "guardian_relationships_guardian_id_users_id_fk": {
-          "name": "guardian_relationships_guardian_id_users_id_fk",
-          "tableFrom": "guardian_relationships",
-          "tableTo": "users",
-          "columnsFrom": [
-            "guardian_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -1046,106 +796,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.moderation_cases": {
-      "name": "moderation_cases",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "target_type": {
-          "name": "target_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "target_id": {
-          "name": "target_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'OPEN'"
-        },
-        "resolved_by": {
-          "name": "resolved_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "resolution_note": {
-          "name": "resolution_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "resolved_at": {
-          "name": "resolved_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "moderation_status_idx": {
-          "name": "moderation_status_idx",
-          "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "moderation_cases_resolved_by_users_id_fk": {
-          "name": "moderation_cases_resolved_by_users_id_fk",
-          "tableFrom": "moderation_cases",
-          "tableTo": "users",
-          "columnsFrom": [
-            "resolved_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.pickup_games": {
       "name": "pickup_games",
       "schema": "",
@@ -1345,106 +995,6 @@
           ]
         }
       },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.reports": {
-      "name": "reports",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "case_id": {
-          "name": "case_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reporter_id": {
-          "name": "reporter_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "reports_one_per_case_idx": {
-          "name": "reports_one_per_case_idx",
-          "columns": [
-            {
-              "expression": "case_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "reporter_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "reports_case_id_moderation_cases_id_fk": {
-          "name": "reports_case_id_moderation_cases_id_fk",
-          "tableFrom": "reports",
-          "tableTo": "moderation_cases",
-          "columnsFrom": [
-            "case_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "reports_reporter_id_users_id_fk": {
-          "name": "reports_reporter_id_users_id_fk",
-          "tableFrom": "reports",
-          "tableTo": "users",
-          "columnsFrom": [
-            "reporter_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1653,79 +1203,6 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.user_blocks": {
-      "name": "user_blocks",
-      "schema": "",
-      "columns": {
-        "blocker_id": {
-          "name": "blocker_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "blocked_id": {
-          "name": "blocked_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "user_blocks_blocker_id_users_id_fk": {
-          "name": "user_blocks_blocker_id_users_id_fk",
-          "tableFrom": "user_blocks",
-          "tableTo": "users",
-          "columnsFrom": [
-            "blocker_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "user_blocks_blocked_id_users_id_fk": {
-          "name": "user_blocks_blocked_id_users_id_fk",
-          "tableFrom": "user_blocks",
-          "tableTo": "users",
-          "columnsFrom": [
-            "blocked_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "user_blocks_blocker_id_blocked_id_pk": {
-          "name": "user_blocks_blocker_id_blocked_id_pk",
-          "columns": [
-            "blocker_id",
-            "blocked_id"
-          ]
-        }
-      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

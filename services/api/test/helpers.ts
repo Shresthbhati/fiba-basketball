@@ -2,14 +2,16 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { buildApp } from "../src/app.js";
+import { MemoryMailer } from "../src/identity/mailer.js";
 import type { Db } from "../src/db/index.js";
 import * as schema from "../src/db/schema.js";
 
 export async function testApp() {
   const db = drizzle(new PGlite(), { schema });
   await migrate(db, { migrationsFolder: new URL("../drizzle", import.meta.url).pathname });
-  const app = await buildApp(db as unknown as Db, { secureCookies: false, requireVerifiedGuardianEmail: false });
-  return { app, db: db as unknown as Db };
+  const mailer = new MemoryMailer();
+  const app = await buildApp(db as unknown as Db, { secureCookies: false, requireVerifiedGuardianEmail: false, mailer, webBaseUrl: "http://web.test" });
+  return { app, db: db as unknown as Db, mailer };
 }
 
 export const adultBody = (over: Record<string, unknown> = {}) => ({

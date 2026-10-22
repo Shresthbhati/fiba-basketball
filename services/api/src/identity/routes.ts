@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { permissionsFor } from "../authz/service.js";
+import type { Mailer } from "./mailer.js";
+import { confirmPasswordReset, requestPasswordReset, sendVerification, verifyEmail } from "./tokens.js";
 import type { Db } from "../db/index.js";
 import { AuthError, SESSION_TTL_MS, login, logout, signup, userForToken, type PublicUser } from "./service.js";
 
@@ -22,7 +24,7 @@ declare module "fastify" {
   }
 }
 
-export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCookies: boolean; allowedOrigins?: string[] }) {
+export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCookies: boolean; allowedOrigins?: string[]; mailer: Mailer; webBaseUrl: string; rateLimitScale?: number }) {
   app.decorateRequest("user", null);
 
   // CSRF: browsers always send Origin on cross-site mutations. When the web app proxies /api to us the Host header
@@ -46,11 +48,13 @@ export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCoo
       httpOnly: true, sameSite: "lax", secure: opts.secureCookies, path: "/", maxAge: SESSION_TTL_MS / 1000,
     });
 
-  const authLimit = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
+  const scale = Math.max(1, opts.rateLimitScale ?? 1); // production keeps 1; automated browser tests raise it
+  const authLimit = { config: { rateLimit: { max: 10 * scale, timeWindow: "1 minute" } } };
 
   app.post("/api/v1/auth/signup", { ...authLimit, config: { ...authLimit.config, access: "public" } }, async (req, reply) => {
     const body = signupBody.parse(req.body);
     const { user, token } = await signup(db, body);
+    await sendVerification(db, opts.mailer, opts.webBaseUrl, user.id).catch(() => undefined); // a mail outage must not block sign-up
     setCookie(reply, token);
     return reply.status(201).send(user);
   });
@@ -66,6 +70,31 @@ export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCoo
     const token = req.cookies[COOKIE];
     if (token) await logout(db, token);
     reply.clearCookie(COOKIE, { path: "/" });
+    return reply.status(204).send();
+  });
+
+  const tokenBody = z.object({ token: z.string().min(20).max(200) });
+  const strict = { config: { rateLimit: { max: 5 * scale, timeWindow: "1 minute" } } };
+
+  app.post("/api/v1/auth/password-reset/request", { ...strict, config: { ...strict.config, access: "public" } }, async (req, reply) => {
+    const { email } = z.object({ email: z.string().min(3).max(320) }).parse(req.body);
+    await requestPasswordReset(db, opts.mailer, opts.webBaseUrl, email).catch(() => undefined);
+    return reply.status(202).send({ ok: true }); // same answer whether or not the account exists
+  });
+
+  app.post("/api/v1/auth/password-reset/confirm", { ...authLimit, config: { ...authLimit.config, access: "public" } }, async (req, reply) => {
+    const body = tokenBody.extend({ password: z.string().min(10).max(200) }).parse(req.body);
+    await confirmPasswordReset(db, body.token, body.password);
+    return reply.status(204).send();
+  });
+
+  app.post("/api/v1/auth/email/send-verification", { ...strict, config: { ...strict.config, access: "authenticated" } }, async (req, reply) => {
+    await sendVerification(db, opts.mailer, opts.webBaseUrl, req.user!.id);
+    return reply.status(202).send({ ok: true });
+  });
+
+  app.post("/api/v1/auth/email/verify", { ...authLimit, config: { ...authLimit.config, access: "public" } }, async (req, reply) => {
+    await verifyEmail(db, tokenBody.parse(req.body).token);
     return reply.status(204).send();
   });
 
