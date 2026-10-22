@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import cookie from "@fastify/cookie";
+import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
+import { sql } from "drizzle-orm";
 import { ZodError } from "zod";
 import type { Db } from "./db/index.js";
 import { enforceAccess } from "./authz/guard.js";
@@ -16,13 +18,18 @@ import { registerIdentity } from "./identity/routes.js";
 import { registerConsent } from "./consent/routes.js";
 import { registerTrust } from "./trust/routes.js";
 
-export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[]; mailer?: Mailer; webBaseUrl?: string; rateLimitScale?: number; requireVerifiedGuardianEmail?: boolean } = {}): Promise<FastifyInstance> {
+export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[]; mailer?: Mailer; webBaseUrl?: string; rateLimitScale?: number; requireVerifiedGuardianEmail?: boolean; logger?: boolean; logStream?: { write(msg: string): void } } = {}): Promise<FastifyInstance> {
+  // Structured JSON logs with the request id. Cookies and credentials are redacted and request bodies are never logged.
+  const logger = opts.logger || opts.logStream
+    ? { level: "info", redact: { paths: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'], censor: "[redacted]" }, ...(opts.logStream ? { stream: opts.logStream } : {}) }
+    : false;
   const app = Fastify({
-    logger: false,
+    logger,
     genReqId: (req) => (req.headers["x-request-id"] as string | undefined) ?? randomUUID(),
     requestIdHeader: "x-request-id",
   });
 
+  await app.register(helmet);
   await app.register(cookie);
   await app.register(rateLimit, { global: false });
   app.addHook("onSend", async (req, reply) => {
@@ -58,6 +65,15 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerTraining(app, db);
   registerMatchScoring(app, db, new MatchBus());
 
+  // Liveness: the process is up. Readiness: it can reach the database (use this for load balancer checks).
   app.get("/health", async () => ({ status: "UP" }));
+  app.get("/ready", async (_req, reply) => {
+    try {
+      await (db as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(sql`select 1`);
+      return { status: "READY" };
+    } catch {
+      return reply.status(503).send({ status: "NOT_READY" });
+    }
+  });
   return app;
 }
