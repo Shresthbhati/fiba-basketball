@@ -4,6 +4,7 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import type { Db } from "./db/index.js";
+import { enforceAccess } from "./authz/guard.js";
 import { registerIdentity } from "./identity/routes.js";
 
 export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean } = {}): Promise<FastifyInstance> {
@@ -36,6 +37,7 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
     });
   });
 
+  enforceAccess(app, db);
   registerIdentity(app, db, { secureCookies: opts.secureCookies ?? true });
 
   app.get("/health", async () => ({ status: "UP" }));

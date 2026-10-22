@@ -21,3 +21,18 @@ export const sessions = pgTable(
   },
   (t) => [index("sessions_user_idx").on(t.userId)],
 );
+
+export const roleAssignments = pgTable(
+  "role_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    // Both null = global role. Otherwise the role only applies to that one resource.
+    resourceType: text("resource_type"),
+    resourceId: uuid("resource_id"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("role_assignments_user_idx").on(t.userId)],
+);
