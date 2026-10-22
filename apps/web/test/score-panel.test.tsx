@@ -1,0 +1,48 @@
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { NetworkError } from "../lib/api";
+import { ScorePanel } from "../lib/score-panel";
+import { ScoreQueue, type Post, type Saved, type Store } from "../lib/score-queue";
+
+afterEach(cleanup);
+const store = (): Store => { const d = new Map<string, Saved>(); return { load: (k) => d.get(k) ?? null, save: (k, v) => void d.set(k, v) }; };
+const offline: Post = async () => { throw new NetworkError("offline"); };
+const online: Post = async (_p, body) => {
+  const n = (body as { events: unknown[] }).events.length;
+  return { version: n, accepted: n, duplicates: 0, state: { version: n, homeScore: 3, awayScore: 0, period: 1 } };
+};
+
+describe("ScorePanel", () => {
+  it("shows the score immediately and explains the offline state with a pending count", async () => {
+    const q = new ScoreQueue("m", offline, store());
+    render(<ScorePanel queue={q} />);
+    await act(async () => { fireEvent.click(screen.getByLabelText("Home +3 points")); });
+    expect(screen.getByLabelText("Home").textContent).toContain("3");
+    expect(screen.getByRole("status").textContent).toMatch(/Offline/);
+    expect(screen.getByRole("status").textContent).toMatch(/1 waiting to send/);
+  });
+
+  it("undo removes the points, and saved state is reported once the server confirms", async () => {
+    const q = new ScoreQueue("m", offline, store());
+    render(<ScorePanel queue={q} />);
+    await act(async () => { fireEvent.click(screen.getByLabelText("Away +2 points")); });
+    await act(async () => { fireEvent.click(screen.getByText("Undo last")); });
+    expect(screen.getByLabelText("Away").textContent).toContain("0");
+
+    const q2 = new ScoreQueue("m2", online, store());
+    cleanup();
+    render(<ScorePanel queue={q2} />);
+    await act(async () => { fireEvent.click(screen.getByLabelText("Home +3 points")); });
+    expect(screen.getByRole("status").textContent).toMatch(/All changes saved/);
+  });
+
+  it("shows the conflict dialog with both choices", async () => {
+    const q = new ScoreQueue("m3", offline, store());
+    q.conflict = { currentVersion: 2, state: { version: 2, homeScore: 4, awayScore: 2, period: 1 }, newerEvents: [] };
+    q.status = "conflict";
+    render(<ScorePanel queue={q} />);
+    expect(screen.getByRole("alertdialog").textContent).toMatch(/4 – 2/);
+    expect(screen.getByText("Keep mine and add them on top")).toBeTruthy();
+    expect(screen.getByText("Discard mine and use the official score")).toBeTruthy();
+  });
+});
