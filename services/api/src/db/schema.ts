@@ -173,3 +173,17 @@ export const matchEvents = pgTable(
   },
   (t) => [index("match_events_match_idx").on(t.matchId, t.serverSeq)],
 );
+
+// One-time links sent by email (password reset, email verification). Only the hash of the token is stored.
+export const authTokens = pgTable(
+  "auth_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull(), // PASSWORD_RESET | EMAIL_VERIFY
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("auth_tokens_user_idx").on(t.userId, t.purpose)],
+);
