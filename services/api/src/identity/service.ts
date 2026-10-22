@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt } from "drizzle-orm";
 import type { Db } from "../db/index.js";
 import { sessions, users } from "../db/schema.js";
+import { grantRole } from "../authz/service.js";
 import { MIN_AGE, ageOn } from "./age.js";
 import { hashPassword, verifyPassword } from "./password.js";
 
@@ -43,6 +44,7 @@ export async function signup(
       dateOfBirth: input.dateOfBirth, isMinor: age < 18,
     })
     .returning();
+  await grantRole(db, user!.id, "PLAYER");
   return { user: toPublic(user!), token: await startSession(db, user!.id) };
 }
 

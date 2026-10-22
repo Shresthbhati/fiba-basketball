@@ -8,6 +8,20 @@
       "when": 1792694071364,
       "tag": "0000_lame_sabra",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792694574262,
+      "tag": "0001_eminent_wolf_cub",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792694756736,
+      "tag": "0002_familiar_doomsday",
+      "breakpoints": true
     }
   ]
 }

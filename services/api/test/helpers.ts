@@ -18,3 +18,10 @@ export const adultBody = (over: Record<string, unknown> = {}) => ({
 
 export const cookieOf = (res: { headers: Record<string, unknown> }) =>
   String(([] as string[]).concat(res.headers["set-cookie"] as string | string[])[0]).split(";")[0]!;
+
+type T = Awaited<ReturnType<typeof testApp>>;
+export async function user(t: T, email: string, over: Record<string, unknown> = {}) {
+  const res = await t.app.inject({ method: "POST", url: "/api/v1/auth/signup", payload: adultBody({ email, ...over }) });
+  return { id: res.json().id as string, cookie: cookieOf(res) };
+}
+

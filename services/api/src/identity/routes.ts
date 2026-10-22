@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { permissionsFor } from "../authz/service.js";
 import type { Db } from "../db/index.js";
 import { AuthError, SESSION_TTL_MS, login, logout, signup, userForToken, type PublicUser } from "./service.js";
 
@@ -41,29 +42,30 @@ export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCoo
 
   const authLimit = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
 
-  app.post("/api/v1/auth/signup", authLimit, async (req, reply) => {
+  app.post("/api/v1/auth/signup", { ...authLimit, config: { ...authLimit.config, access: "public" } }, async (req, reply) => {
     const body = signupBody.parse(req.body);
     const { user, token } = await signup(db, body);
     setCookie(reply, token);
     return reply.status(201).send(user);
   });
 
-  app.post("/api/v1/auth/login", authLimit, async (req, reply) => {
+  app.post("/api/v1/auth/login", { ...authLimit, config: { ...authLimit.config, access: "public" } }, async (req, reply) => {
     const body = loginBody.parse(req.body);
     const { user, token } = await login(db, body.email, body.password);
     setCookie(reply, token);
     return user;
   });
 
-  app.post("/api/v1/auth/logout", async (req: FastifyRequest, reply) => {
+  app.post("/api/v1/auth/logout", { config: { access: "public" } }, async (req: FastifyRequest, reply) => {
     const token = req.cookies[COOKIE];
     if (token) await logout(db, token);
     reply.clearCookie(COOKIE, { path: "/" });
     return reply.status(204).send();
   });
 
-  app.get("/api/v1/me", async (req) => {
-    if (!req.user) throw new AuthError(401, "Not signed in");
-    return req.user;
-  });
+  app.get("/api/v1/me", { config: { access: "authenticated" } }, async (req) => req.user);
+
+  app.get("/api/v1/me/permissions", { config: { access: "authenticated" } }, async (req) =>
+    permissionsFor(db, req.user!.id),
+  );
 }
