@@ -14,6 +14,7 @@ const CONSENT_LABEL: Record<string, string> = {
   PUBLIC_PICKUP: "Join public pickup games",
   PROFILE_DISCOVERY: "Appear in player discovery",
   MEDIA_USE: "Use photos and video of them",
+  COMPETITION_PLAY: "Play in organised competitions",
 };
 
 function ConsentList({ consents, onToggle, canGrant }: { consents: Consents; onToggle: (kind: string, on: boolean) => void; canGrant: boolean }) {

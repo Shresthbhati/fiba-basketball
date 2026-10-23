@@ -1,5 +1,6 @@
 import { and, asc, count, eq } from "drizzle-orm";
 import { can } from "../authz/service.js";
+import { hasConsent } from "../consent/service.js";
 import { writeAudit } from "../audit/service.js";
 import type { Db } from "../db/index.js";
 import { competitionRosters, competitionTeams, competitions, roleAssignments, teams, users } from "../db/schema.js";
@@ -32,14 +33,21 @@ export async function getRoster(db: Db, viewer: Viewer, competitionId: string, t
     .innerJoin(users, eq(users.id, competitionRosters.userId))
     .where(and(eq(competitionRosters.competitionId, competitionId), eq(competitionRosters.teamId, teamId)))
     .orderBy(asc(competitionRosters.jersey));
-  // Who could still be added: adult team members not on any roster in this competition. Only shown to people who can edit.
+  // Who could still be added: team members not on any roster in this competition (under-18s only once a guardian has consented to
+  // competition play). Only shown to people who can edit.
   const taken = new Set((await db.select({ userId: competitionRosters.userId }).from(competitionRosters).where(eq(competitionRosters.competitionId, competitionId))).map((r) => r.userId));
-  const candidates = canEdit
-    ? (await db.select({ userId: users.id, name: users.displayName, isMinor: users.isMinor }).from(roleAssignments)
-        .innerJoin(users, eq(users.id, roleAssignments.userId))
-        .where(and(eq(roleAssignments.resourceType, "team"), eq(roleAssignments.resourceId, teamId)))
-        .orderBy(asc(users.displayName))).filter((u) => !u.isMinor && !taken.has(u.userId)).map(({ userId, name }) => ({ userId, name }))
-    : [];
+  const candidates: { userId: string; name: string }[] = [];
+  if (canEdit) {
+    const members = await db.select({ userId: users.id, name: users.displayName, isMinor: users.isMinor }).from(roleAssignments)
+      .innerJoin(users, eq(users.id, roleAssignments.userId))
+      .where(and(eq(roleAssignments.resourceType, "team"), eq(roleAssignments.resourceId, teamId)))
+      .orderBy(asc(users.displayName));
+    for (const u of members) {
+      if (taken.has(u.userId)) continue;
+      if (u.isMinor && !(await hasConsent(db, { id: u.userId, isMinor: true }, "COMPETITION_PLAY"))) continue;
+      candidates.push({ userId: u.userId, name: u.name });
+    }
+  }
   return { items, canEdit, max: MAX_ROSTER, candidates };
 }
 
@@ -51,7 +59,10 @@ export async function setRosterSpot(db: Db, actor: Viewer, competitionId: string
   const [member] = await db.select({ id: roleAssignments.id }).from(roleAssignments)
     .where(and(eq(roleAssignments.userId, userId), eq(roleAssignments.resourceType, "team"), eq(roleAssignments.resourceId, teamId)));
   if (!player || !member) throw new AuthError(409, "Only people on the team can be added to its roster");
-  if (player.isMinor) throw new AuthError(409, "Under-18 players cannot be added to competition rosters yet");
+  // An under-18 player needs an active guardian's consent to play in organised competitions.
+  if (player.isMinor && !(await hasConsent(db, player, "COMPETITION_PLAY"))) {
+    throw new AuthError(409, "This player is under 18 and needs guardian consent for competition play before joining a roster");
+  }
 
   const [elsewhere] = await db.select({ teamId: competitionRosters.teamId }).from(competitionRosters)
     .where(and(eq(competitionRosters.competitionId, competitionId), eq(competitionRosters.userId, userId)));

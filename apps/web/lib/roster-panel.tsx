@@ -61,7 +61,7 @@ export function RosterPanel({ competitionId, teamId }: { competitionId: string; 
               </label>
               <label>Jersey number <input type="number" min={0} max={99} value={jersey} onChange={(e) => setJersey(e.target.value)} required /></label>
               <button type="submit">Add to roster</button>
-              <small>Only adult team members can be added. Under-18 players can't be on competition rosters yet. Rosters are only visible to the team and the organizer.</small>
+              <small>Players under 18 appear here only after a parent or guardian has allowed competition play in their Safety settings. Rosters are only visible to the team and the organizer.</small>
             </form>
           )}
         </>

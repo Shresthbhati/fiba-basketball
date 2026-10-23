@@ -17,7 +17,7 @@ function mockApi() {
     return new Response(null, { status: 204 });
   }));
 }
-const noConsent = { PUBLIC_PICKUP: false, PROFILE_DISCOVERY: false, MEDIA_USE: false };
+const noConsent = { PUBLIC_PICKUP: false, PROFILE_DISCOVERY: false, MEDIA_USE: false, COMPETITION_PLAY: false };
 beforeEach(() => { calls = []; });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -61,6 +61,9 @@ describe("SafetyPanel", () => {
     expect(await screen.findByText("Permissions for Kid")).toBeTruthy();
     fireEvent.click((await screen.findAllByLabelText("Allow: Join public pickup games"))[1]!);
     await waitFor(() => expect(calls).toContain("PUT /consents/PUBLIC_PICKUP"));
+    // A guardian can allow competition play for their ward too (needed before the teen can be on a competition roster).
+    fireEvent.click((await screen.findAllByLabelText("Allow: Play in organised competitions"))[1]!);
+    await waitFor(() => expect(calls).toContain("PUT /consents/COMPETITION_PLAY"));
   });
 
   it("shows blocked people with an undo, and a login prompt when signed out", async () => {
