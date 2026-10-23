@@ -45,4 +45,49 @@ describe("ScorePanel", () => {
     expect(screen.getByText("Keep mine and add them on top")).toBeTruthy();
     expect(screen.getByText("Discard mine and use the official score")).toBeTruthy();
   });
+
+  describe("player credit", () => {
+    const rosters = { home: [{ userId: "h1", name: "Ann", jersey: 7 }, { userId: "h2", name: "Cy", jersey: 9 }], away: [{ userId: "a1", name: "Bea", jersey: 11 }] };
+    const sent = (q: ScoreQueue) => q.pending.map((e) => ({ type: e.type, side: e.side, playerId: e.playerId }));
+
+    it("shows no picker without rosters, and scoring works as before", async () => {
+      const q = new ScoreQueue("p0", offline, store());
+      render(<ScorePanel queue={q} rosters={null} />);
+      expect(screen.queryByRole("group", { name: /player/ })).toBeNull();
+      await act(async () => { fireEvent.click(screen.getByLabelText("Home +2 points")); });
+      expect(sent(q)).toEqual([{ type: "FIELD_GOAL", side: "home", playerId: undefined }]);
+    });
+
+    it("credits events to the chosen player until another is chosen, per side, and never credits non-player events", async () => {
+      const q = new ScoreQueue("p1", offline, store());
+      render(<ScorePanel queue={q} rosters={rosters} />);
+      const home = screen.getByRole("group", { name: "Home player" });
+      const away = screen.getByRole("group", { name: "Away player" });
+      await act(async () => { fireEvent.click(home.querySelector('[aria-label="#7 Ann"]')!); });
+      await act(async () => { fireEvent.click(screen.getByLabelText("Home +3 points")); });
+      await act(async () => { fireEvent.click(screen.getByLabelText("Home +2 points")); }); // still Ann
+      await act(async () => { fireEvent.click(away.querySelector('[aria-label="#11 Bea"]')!); });
+      await act(async () => { fireEvent.click(screen.getByLabelText("Away +1 points")); });
+      await act(async () => { fireEvent.click(home.querySelector('[aria-label="#9 Cy"]')!); });
+      await act(async () => { fireEvent.click(screen.getByLabelText("Home +1 points")); });
+      await act(async () => { fireEvent.click(screen.getAllByText("Timeout")[0]!); }); // home timeout: a team event
+      await act(async () => { fireEvent.click(home.querySelector("button")!); }); // "No player"
+      await act(async () => { fireEvent.click(screen.getByLabelText("Home +2 points")); });
+      expect(sent(q)).toEqual([
+        { type: "THREE_POINT", side: "home", playerId: "h1" }, { type: "FIELD_GOAL", side: "home", playerId: "h1" },
+        { type: "FREE_THROW", side: "away", playerId: "a1" }, { type: "FREE_THROW", side: "home", playerId: "h2" },
+        { type: "TIMEOUT", side: "home", playerId: undefined }, { type: "FIELD_GOAL", side: "home", playerId: undefined },
+      ]);
+    });
+
+    it("the extra stat buttons (misses, rebound, assist, turnover) are credited the same way", async () => {
+      const q = new ScoreQueue("p2", offline, store());
+      render(<ScorePanel queue={q} rosters={rosters} />);
+      await act(async () => { fireEvent.click(screen.getByLabelText("#7 Ann")); });
+      await act(async () => { fireEvent.click(screen.getByLabelText("Home Rebound")); });
+      await act(async () => { fireEvent.click(screen.getByLabelText("Home Miss 3")); });
+      expect(sent(q)).toEqual([{ type: "REBOUND", side: "home", playerId: "h1" }, { type: "THREE_POINT_MISSED", side: "home", playerId: "h1" }]);
+      expect(screen.getByLabelText("Home").textContent).toContain("0"); // misses don't change the score
+    });
+  });
 });

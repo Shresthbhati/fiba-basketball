@@ -3,6 +3,7 @@ import { ApiError, NetworkError } from "./api";
 export type Side = "home" | "away";
 export type PendingEvent = {
   id: string; localSeq: number; type: string; side?: Side; period: number; clockSeconds?: number; correctsEventId?: string;
+  playerId?: string; // optional: the rostered player this event is credited to
 };
 export type ServerEvent = PendingEvent & { serverSeq: number };
 export type ServerState = { version: number; homeScore: number; awayScore: number; period: number };
@@ -58,11 +59,12 @@ export class ScoreQueue {
     return { home, away };
   }
 
-  add(type: string, opts: { side?: Side; period: number; clockSeconds?: number; correctsEventId?: string }) {
+  add(type: string, opts: { side?: Side; period: number; clockSeconds?: number; correctsEventId?: string; playerId?: string }) {
     const e: PendingEvent = { id: uuid(), localSeq: this.s.nextLocalSeq++, type, period: opts.period };
     if (opts.side) e.side = opts.side;
     if (opts.clockSeconds !== undefined) e.clockSeconds = opts.clockSeconds;
     if (opts.correctsEventId) e.correctsEventId = opts.correctsEventId;
+    if (opts.playerId) e.playerId = opts.playerId;
     this.s.pending.push(e);
     this.emit();
     return e;

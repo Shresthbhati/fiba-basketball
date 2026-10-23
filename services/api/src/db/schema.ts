@@ -187,6 +187,8 @@ export const matchEvents = pgTable(
     period: integer("period").notNull(),
     clockSeconds: integer("clock_seconds"),
     correctsEventId: uuid("corrects_event_id"),
+    // Optional: the rostered player this event is credited to (validated against the team's competition roster).
+    playerId: uuid("player_id").references(() => users.id),
     createdBy: uuid("created_by").notNull().references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

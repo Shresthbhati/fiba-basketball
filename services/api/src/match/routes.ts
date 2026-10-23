@@ -7,7 +7,10 @@ import { users } from "../db/schema.js";
 import { AuthError } from "../identity/service.js";
 import type { MatchBus } from "./bus.js";
 import { ConflictError, batchInput, listEvents, matchState, submitEvents } from "./events.js";
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
+import { competitionRosters } from "../db/schema.js";
+import { boxScore } from "./box-score.js";
+import { matchEventsOf } from "./events.js";
 
 const id = z.object({ id: z.uuid() });
 const paramId = (req: FastifyRequest) => id.parse(req.params).id;
@@ -26,6 +29,42 @@ export function registerMatchScoring(app: FastifyInstance, db: Db, bus: MatchBus
     await visibleCompetition(db, m.competitionId, manager);
     return m;
   }
+
+  type RosterRow = { userId: string; name: string; jersey: number };
+  const rosterOf = async (competitionId: string, teamId: string | null): Promise<RosterRow[]> =>
+    teamId === null ? [] : db.select({ userId: users.id, name: users.displayName, jersey: competitionRosters.jersey })
+      .from(competitionRosters).innerJoin(users, eq(users.id, competitionRosters.userId))
+      .where(and(eq(competitionRosters.competitionId, competitionId), eq(competitionRosters.teamId, teamId))).orderBy(asc(competitionRosters.jersey));
+
+  /** The two rosters a scorer picks players from. */
+  app.get("/api/v1/matches/:id/rosters", { config: { access: score } }, async (req) => {
+    const m = await getMatch(db, paramId(req));
+    return { home: await rosterOf(m.competitionId, m.homeTeamId), away: await rosterOf(m.competitionId, m.awayTeamId) };
+  });
+
+  /**
+   * Box score: public once the competition is published. Players appear by jersey number; names are added only for people who may
+   * see that team's roster (its members and the organizer), because rosters are not public.
+   */
+  app.get("/api/v1/matches/:id/box-score", { config: { access: "public" } }, async (req) => {
+    const m = await viewable(req);
+    const events = await matchEventsOf(db, m.id);
+    const stats = boxScore(events.map((e) => ({ id: e.id, type: e.type as never, side: e.side as never, playerId: e.playerId, correctsEventId: e.correctsEventId })));
+    const out = {} as Record<"home" | "away", { players: unknown[]; unattributed: unknown; total: unknown }>;
+    for (const side of ["home", "away"] as const) {
+      const teamId = side === "home" ? m.homeTeamId : m.awayTeamId;
+      const seesNames = req.user && teamId
+        ? (await can(db, req.user.id, "team:view", { type: "team", id: teamId })) || (await can(db, req.user.id, "competition:manage", { type: "competition", id: m.competitionId }))
+        : false;
+      const roster = new Map((await rosterOf(m.competitionId, teamId)).map((r) => [r.userId, r]));
+      const players = [...stats.players.entries()].filter(([, p]) => p.side === side).map(([userId, p]) => {
+        const r = roster.get(userId);
+        return { jersey: r?.jersey ?? null, ...(seesNames && r ? { name: r.name } : {}), ...p.line };
+      }).sort((a, b) => (a.jersey ?? 999) - (b.jersey ?? 999));
+      out[side] = { players, unattributed: stats.unattributed[side], total: stats.totals[side] };
+    }
+    return out;
+  });
 
   app.post("/api/v1/matches/:id/events", { config: { access: score } }, async (req, reply) => {
     try {

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ApiError, api } from "./api";
+import { BoxScore } from "./box-score";
 import { formatLabel, stateLabel, statusLabel, type CompetitionDetail, type MatchRow, type StandingRow } from "./competition-types";
 
 const roundName = (round: number, last: number, knockout: boolean) =>
@@ -183,6 +184,7 @@ export function CompetitionPanel({ id }: { id: string }) {
                   <>
                     <strong>{team(m.homeTeamId)}</strong> {m.homeScore ?? "–"} : {m.awayScore ?? "–"} <strong>{team(m.awayTeamId)}</strong>
                     <div style={{ color: "var(--muted)" }}>{stateLabel[m.state]}{m.forfeit ? " (forfeit)" : ""}</div>
+                    {!m.forfeit && m.state !== "SCHEDULED" && <BoxScore matchId={m.id} homeName={team(m.homeTeamId)} awayName={team(m.awayTeamId)} />}
                     {m.scheduledAt && <div style={{ color: "var(--muted)" }}>Scheduled for <time dateTime={m.scheduledAt}>{new Date(m.scheduledAt).toLocaleString()}</time></div>}
                     {comp.canManage && m.state !== "LOCKED" && m.homeTeamId && m.awayTeamId && <Link href={`/score/${m.id}`}>{m.state === "FINISHED" ? "Reopen scorer" : "Open scorer"}</Link>}
                     {comp.canManage && m.homeTeamId && m.awayTeamId && <MatchAdmin key={`${m.state}-${m.homeScore}-${m.awayScore}-${m.scheduledAt}`} m={m} home={team(m.homeTeamId)} away={team(m.awayTeamId)} run={run} busy={busy} />}
