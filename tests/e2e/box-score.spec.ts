@@ -96,6 +96,12 @@ test("box score: score with players picked from rosters, then see the box score 
   expect(sub).toMatchObject({ playerOutId: null, clockSeconds: 450 });
   expect(sub?.playerId).toBeTruthy();
 
+  // End the period early with 5:00 left: that clock is recorded on a PERIOD_END and caps Pia's minutes (7:30 -> 5:00 = 2:30).
+  await org.getByLabel("Set clock").fill("5:00");
+  await org.getByRole("button", { name: "Set", exact: true }).click();
+  await org.getByRole("button", { name: "End period" }).click();
+  await expect(org.locator("main").getByRole("status").first()).toContainText("All changes saved");
+
   // Before the game is official nobody has a record; the player's own page is empty.
   await pia.page.goto("/career");
   await expect(pia.page.getByText(/No official games yet/)).toBeVisible();
@@ -112,9 +118,9 @@ test("box score: score with players picked from rosters, then see the box score 
   await expect(cometsBox.getByRole("row", { name: /Not credited to a player/ })).toContainText("1");
   await expect(cometsBox.getByRole("row", { name: /^Team/ })).toContainText("6");
   await expect(matchRow.getByRole("table", { name: "Blazers box score" }).getByRole("row", { name: /#23 Sam Wing/ })).toBeVisible();
-  // Minutes: only the Comets had a lineup recorded (Pia came on at 7:30 and the period ran out), the Blazers get no MIN column.
+  // Minutes: only the Comets had a lineup recorded (Pia came on at 7:30 and the period was ended at 5:00), the Blazers get no MIN column.
   await expect(cometsBox.getByRole("columnheader", { name: "MIN" })).toBeVisible();
-  await expect(cometsBox.getByRole("row", { name: /#7 Pia Guard/ })).toContainText("7:30");
+  await expect(cometsBox.getByRole("row", { name: /#7 Pia Guard/ })).toContainText("2:30");
   await expect(matchRow.getByRole("table", { name: "Blazers box score" }).getByRole("columnheader", { name: "MIN" })).toHaveCount(0);
 
   await fan.goto(competitionUrl);
