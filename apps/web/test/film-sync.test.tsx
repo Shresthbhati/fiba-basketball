@@ -47,7 +47,7 @@ describe("FilmRoom scorebook", () => {
 
   it("once linked, a coach lines up the video using the current video time and a chosen basket", async () => {
     game = { ...base, canManage: true, matchId: "m1", synced: false };
-    timeline = { linked: true, synced: false, ours: "home", untimed: 1, syncEventId: null, items: [item({ id: "e1" }), item({ id: "e2", type: "TIMEOUT", side: "home" })] as never };
+    timeline = { linked: true, synced: false, ours: "home", untimed: 1, syncPoints: [], items: [item({ id: "e1" }), item({ id: "e2", type: "TIMEOUT", side: "home" })] as never };
     render(<FilmRoom gameId="g1" />);
     const form = await screen.findByRole("form", { name: "Line up the video" });
     expect(within(form).queryByText(/timeout/)).toBeNull(); // only baskets can be used to line up
@@ -60,7 +60,7 @@ describe("FilmRoom scorebook", () => {
 
   it("a synced film shows a clickable timeline that jumps the video; players can use it but not change it", async () => {
     game = { ...base, canManage: false, matchId: "m1", synced: true };
-    timeline = { linked: true, synced: true, ours: "home", untimed: 0, syncEventId: "e1", items: [
+    timeline = { linked: true, synced: true, ours: "home", untimed: 0, syncPoints: [{ eventId: "e1", videoMs: 130_000 }], items: [
       item({ id: "e1", videoMs: 130_000, jersey: 7, playerName: "Ann" }), item({ id: "e3", type: "THREE_POINT", side: "away", videoMs: 225_000, homeScore: 2, awayScore: 3 }),
       item({ id: "e4", videoMs: null }), // before the video starts: not listed
     ] as never };
@@ -76,9 +76,37 @@ describe("FilmRoom scorebook", () => {
     expect(within(list).getByText(/our \+2 #7 Ann/)).toBeTruthy();
   });
 
+  it("a coach sees the sync points, can add another one and remove one", async () => {
+    game = { ...base, canManage: true, matchId: "m1", synced: true };
+    timeline = { linked: true, synced: true, ours: "home", untimed: 0, syncPoints: [{ eventId: "e1", videoMs: 130_000 }, { eventId: "e9", videoMs: 1_790_000 }], items: [
+      item({ id: "e1", videoMs: 130_000, homeScore: 2 }), item({ id: "e9", videoMs: 1_790_000, period: 2, homeScore: 4 }),
+    ] as never };
+    render(<FilmRoom gameId="g1" />);
+    const points = await screen.findByRole("list", { name: "Sync points" });
+    expect(within(points).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(points).getByText(/Video 2:10 = Q1 · our \+2 · 2–0/)).toBeTruthy();
+    fireEvent.click(within(points).getByRole("button", { name: "Remove sync point at 29:50" }));
+    await waitFor(() => expect(calls.some((c) => c.key === "DELETE /film/games/g1/sync/e9")).toBe(true));
+    // Adding another one uses the same form as the first.
+    const form = screen.getByRole("form", { name: "Add a sync point", hidden: true });
+    Object.defineProperty(screen.getByLabelText("Game video"), "currentTime", { value: 1800, configurable: true });
+    fireEvent.change(within(form).getByLabelText("Basket"), { target: { value: "e9" } });
+    fireEvent.click(within(form).getByText(/Use the current video time/));
+    await waitFor(() => expect(calls.find((c) => c.key === "PUT /film/games/g1/sync")?.body).toBe(JSON.stringify({ eventId: "e9", videoMs: 1_800_000 })));
+  });
+
+  it("players don't see sync points or the sync forms", async () => {
+    game = { ...base, canManage: false, matchId: "m1", synced: true };
+    timeline = { linked: true, synced: true, ours: "home", untimed: 0, syncPoints: [{ eventId: "e1", videoMs: 1000 }], items: [item({ id: "e1", videoMs: 1000 })] as never };
+    render(<FilmRoom gameId="g1" />);
+    await screen.findByRole("list", { name: "Scorebook timeline" });
+    expect(screen.queryByRole("list", { name: "Sync points" })).toBeNull();
+    expect(screen.queryByText("Add another sync point")).toBeNull();
+  });
+
   it("players are told when the coach hasn't lined the film up yet", async () => {
     game = { ...base, canManage: false, matchId: "m1", synced: false };
-    timeline = { linked: true, synced: false, ours: "home", untimed: 0, syncEventId: null, items: [] };
+    timeline = { linked: true, synced: false, ours: "home", untimed: 0, syncPoints: [], items: [] };
     render(<FilmRoom gameId="g1" />);
     expect(await screen.findByText(/has not lined this film up/)).toBeTruthy();
   });

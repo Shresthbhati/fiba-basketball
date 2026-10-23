@@ -16,7 +16,7 @@ export type TimelineItem = {
   id: string; type: string; side: "home" | "away" | null; period: number; videoMs: number | null;
   jersey: number | null; playerName?: string; homeScore: number; awayScore: number;
 };
-export type Timeline = { linked: false } | { linked: true; synced: boolean; ours: "home" | "away"; items: TimelineItem[]; untimed: number; syncEventId: string | null };
+export type Timeline = { linked: false } | { linked: true; synced: boolean; ours: "home" | "away"; items: TimelineItem[]; untimed: number; syncPoints: { eventId: string; videoMs: number }[] };
 export type TeamMatch = { id: string; competition: string; state: string; scheduledAt: string | null; home: string; away: string; homeScore: number | null; awayScore: number | null };
 
 const WHAT: Record<string, string> = {

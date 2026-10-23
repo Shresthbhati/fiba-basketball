@@ -128,6 +128,7 @@ describe("film sync with the scorebook", () => {
     expect((await call(t, w.coachA, "PUT", `/api/v1/film/games/${w.game}/sync`, { eventId: ids.first, videoMs: 130_000 })).statusCode).toBe(204);
     const tl = (await call(t, w.coachA, "GET", `/api/v1/film/games/${w.game}/timeline`)).json();
     expect(tl.synced).toBe(true);
+    expect(tl.syncPoints).toEqual([{ eventId: ids.first, videoMs: 130_000 }]);
     expect(tl.items.map((i: { type: string; videoMs: number }) => [i.type, i.videoMs])).toEqual([["FIELD_GOAL", 130_000], ["THREE_POINT", 225_000]]);
     // Running score is computed from the log, so the later basket shows the right score for its side.
     const total = (i: { homeScore: number; awayScore: number }) => i.homeScore + i.awayScore;
@@ -166,5 +167,58 @@ describe("film sync with the scorebook", () => {
     expect((await sync(w.a1, ids.first)).statusCode).toBe(404); // players can't change it
     expect((await call(t, w.coachA, "PUT", `/api/v1/film/games/${w.game}/sync`, { eventId: ids.first, videoMs: -5 })).statusCode).toBe(400);
     expect((await sync(w.coachA, ids.first)).statusCode).toBe(204);
+  });
+
+  it("several sync points: each event uses the nearest one, so a cut in the video only skews what is near it", async () => {
+    const t = await setup();
+    const w = await world(t);
+    const ids = await score(t, w); // first at t0, second at t0+95s, wrong (corrected) at +120
+    await call(t, w.coachA, "PUT", `/api/v1/film/games/${w.game}/match`, { matchId: w.matchId });
+    const late = randomUUID();
+    await call(t, w.org, "POST", `/api/v1/matches/${w.matchId}/events`, { events: [{ id: late, localSeq: 20, type: "FIELD_GOAL", side: w.ours, period: 2, occurredAt: at(1800) }] });
+    // Pairing 1: first basket at 10 s. Pairing 2: the late basket (30 min later) at 1,900 s, i.e. the video lost 10 s in between (a cut).
+    const sync = (eventId: string, videoMs: number) => call(t, w.coachA, "PUT", `/api/v1/film/games/${w.game}/sync`, { eventId, videoMs });
+    expect((await sync(ids.first, 10_000)).statusCode).toBe(204);
+    expect((await sync(late, 1_790_000)).statusCode).toBe(204);
+    const tl = (await call(t, w.coachA, "GET", `/api/v1/film/games/${w.game}/timeline`)).json();
+    const pos = Object.fromEntries(tl.items.map((i: { id: string; videoMs: number }) => [i.id, i.videoMs]));
+    expect(pos[ids.first]).toBe(10_000); // from point 1
+    expect(pos[ids.second]).toBe(105_000); // 95 s after the first, nearest to point 1
+    expect(pos[late]).toBe(1_790_000); // exactly point 2
+    // Re-sending the same event replaces its position instead of adding a point.
+    expect((await sync(ids.first, 12_000)).statusCode).toBe(204);
+    expect((await call(t, w.coachA, "GET", `/api/v1/film/games/${w.game}/timeline`)).json().syncPoints).toHaveLength(2);
+    // Removing a point: staff only, 404 if it isn't one.
+    expect((await call(t, w.a1, "DELETE", `/api/v1/film/games/${w.game}/sync/${late}`)).statusCode).toBe(404);
+    expect((await call(t, w.coachA, "DELETE", `/api/v1/film/games/${w.game}/sync/${late}`)).statusCode).toBe(204);
+    expect((await call(t, w.coachA, "DELETE", `/api/v1/film/games/${w.game}/sync/${late}`)).statusCode).toBe(404);
+    const after = (await call(t, w.coachA, "GET", `/api/v1/film/games/${w.game}/timeline`)).json();
+    expect(after.syncPoints).toEqual([{ eventId: ids.first, videoMs: 12_000 }]);
+    // Remove the last one: back to "not lined up".
+    await call(t, w.coachA, "DELETE", `/api/v1/film/games/${w.game}/sync/${ids.first}`);
+    expect((await call(t, w.coachA, "GET", `/api/v1/film/games/${w.game}`)).json().synced).toBe(false);
+  });
+
+  it("is capped at 20 sync points", async () => {
+    const t = await setup();
+    const w = await world(t);
+    await call(t, w.coachA, "PUT", `/api/v1/film/games/${w.game}/match`, { matchId: w.matchId });
+    const events = Array.from({ length: 21 }, (_, i) => ({ id: randomUUID(), localSeq: i + 1, type: "FIELD_GOAL", side: w.ours, period: 1, occurredAt: at(i * 10) }));
+    await call(t, w.org, "POST", `/api/v1/matches/${w.matchId}/events`, { events });
+    const put = (e: { id: string }, ms: number) => call(t, w.coachA, "PUT", `/api/v1/film/games/${w.game}/sync`, { eventId: e.id, videoMs: ms });
+    for (let i = 0; i < 20; i++) expect((await put(events[i]!, i * 10_000)).statusCode).toBe(204);
+    expect((await put(events[20]!, 200_000)).statusCode).toBe(409);
+    expect((await put(events[0]!, 5)).statusCode).toBe(204); // changing an existing one is still fine
+  });
+
+  it("relinking to a match clears the old sync points", async () => {
+    const t = await setup();
+    const w = await world(t);
+    const ids = await score(t, w);
+    await call(t, w.coachA, "PUT", `/api/v1/film/games/${w.game}/match`, { matchId: w.matchId });
+    await call(t, w.coachA, "PUT", `/api/v1/film/games/${w.game}/sync`, { eventId: ids.first, videoMs: 1000 });
+    await call(t, w.coachA, "DELETE", `/api/v1/film/games/${w.game}/match`);
+    await call(t, w.coachA, "PUT", `/api/v1/film/games/${w.game}/match`, { matchId: w.matchId });
+    expect((await call(t, w.coachA, "GET", `/api/v1/film/games/${w.game}/timeline`)).json()).toMatchObject({ synced: false, syncPoints: [] });
   });
 });

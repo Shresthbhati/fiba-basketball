@@ -74,4 +74,22 @@ test("film sync: score a game, line the film up with it, and click the scorebook
   const t = await video.evaluate((v: HTMLVideoElement) => v.currentTime);
   expect(t).toBeGreaterThan(3.2); // 1 s + ~3 s between taps (a little more with the browser's click delay)
   expect(t).toBeLessThan(5.5);
+
+  // A second sync point (as if the video had been cut): the other team's three is really at 4.5 s. Events use the nearest point.
+  await page.getByText("Add another sync point").click();
+  const more = page.getByRole("form", { name: "Add a sync point" });
+  await video.evaluate((v: HTMLVideoElement) => { v.currentTime = 4.5; });
+  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime)).toBeCloseTo(4.5, 0);
+  await more.getByLabel("Basket").selectOption({ label: "Q1 · their +3 · 2–3" });
+  await more.getByRole("button", { name: /Use the current video time/ }).click();
+  await expect(page.getByRole("list", { name: "Sync points" }).getByRole("listitem")).toHaveCount(2);
+  await list.getByRole("listitem").last().getByRole("button").click();
+  const t2 = await video.evaluate((v: HTMLVideoElement) => v.currentTime);
+  expect(Math.abs(t2 - 4.5)).toBeLessThan(0.3); // exactly its own sync point now
+
+  // Removing that point puts it back where the first point places it.
+  await page.getByRole("button", { name: /Remove sync point at 0:04/ }).click();
+  await expect(page.getByRole("list", { name: "Sync points" }).getByRole("listitem")).toHaveCount(1);
+  await list.getByRole("listitem").last().getByRole("button").click();
+  expect(await video.evaluate((v: HTMLVideoElement) => v.currentTime)).toBeGreaterThan(3.2); // back to ~1 s + ~3 s from the first point
 });

@@ -10,7 +10,7 @@ import {
   TEAM_ROLES, addMember, createClip, createGame, deleteClip, findGame, listClips, listGames, listMembers, markVideoReady,
   myTeams, readGame, removeMember,
 } from "./service.js";
-import { linkMatch, matchesOfTeam, setSync, timeline, unlinkMatch } from "./sync.js";
+import { linkMatch, matchesOfTeam, removeSync, setSync, timeline, unlinkMatch } from "./sync.js";
 
 const VIDEO_TYPES = { "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" } as const;
 type VideoType = keyof typeof VIDEO_TYPES;
@@ -123,6 +123,11 @@ export function registerFilm(app: FastifyInstance, db: Db, storage: MediaStorage
   app.put("/api/v1/film/games/:id/sync", { config: { access: manageGame } }, async (req, reply) => {
     const body = z.object({ eventId: z.uuid(), videoMs: z.number().int().min(0) }).parse(req.body);
     await setSync(db, idParam.parse(req.params).id, body.eventId, body.videoMs);
+    return reply.status(204).send();
+  });
+  app.delete("/api/v1/film/games/:id/sync/:eventId", { config: { access: manageGame } }, async (req, reply) => {
+    const p = z.object({ id: z.uuid(), eventId: z.uuid() }).parse(req.params);
+    await removeSync(db, p.id, p.eventId);
     return reply.status(204).send();
   });
   app.get("/api/v1/film/games/:id/timeline", { config: { access: viewGame } }, async (req) => timeline(db, idParam.parse(req.params).id));
