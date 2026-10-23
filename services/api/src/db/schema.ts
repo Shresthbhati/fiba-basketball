@@ -376,10 +376,8 @@ export const filmGames = pgTable(
     videoKey: text("video_key"),
     videoType: text("video_type"),
     videoBytes: integer("video_bytes"),
-    // Optional link to the official match, and one sync point: the video position (ms) at which match event `syncEventId` happened.
+    // Optional link to the official match. Sync points (event ↔ video position) live in `film_sync_points`.
     matchId: uuid("match_id").references(() => matches.id),
-    syncEventId: uuid("sync_event_id"),
-    syncVideoMs: integer("sync_video_ms"),
   },
   (t) => [index("film_games_team_idx").on(t.teamId)],
 );
@@ -433,4 +431,16 @@ export const competitionRosters = pgTable(
     primaryKey({ columns: [t.competitionId, t.userId] }),
     uniqueIndex("competition_roster_jersey_idx").on(t.competitionId, t.teamId, t.jersey),
   ],
+);
+
+/** "Match event X happened at this position in the video." Each event of the film's match is placed using the nearest point in time. */
+export const filmSyncPoints = pgTable(
+  "film_sync_points",
+  {
+    gameId: uuid("game_id").notNull().references(() => filmGames.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").notNull(),
+    videoMs: integer("video_ms").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.gameId, t.eventId] })],
 );

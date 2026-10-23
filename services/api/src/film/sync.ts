@@ -1,13 +1,15 @@
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 import type { Db } from "../db/index.js";
-import { competitionRosters, competitions, filmGames, matchEvents, matches, teams, users } from "../db/schema.js";
+import { competitionRosters, competitions, filmGames, filmSyncPoints, matchEvents, matches, teams, users } from "../db/schema.js";
 import { AuthError } from "../identity/service.js";
 import { POINTS, type EventType } from "../match/event-type.js";
 import { findGame } from "./service.js";
 
 type Event = typeof matchEvents.$inferSelect;
 
-/** Where an event falls in the video, given one known pairing of an event time with a video position. Real time passes 1:1. */
+/** Where an event falls in the video, given one known pairing of an event time with a video position. Real time passes 1:1 from that point. */
+export const MAX_SYNC_POINTS = 20;
+
 export const videoMsOf = (eventAt: Date, anchorAt: Date, anchorVideoMs: number) => anchorVideoMs + (eventAt.getTime() - anchorAt.getTime());
 
 export async function matchesOfTeam(db: Db, teamId: string) {
@@ -29,11 +31,13 @@ export async function linkMatch(db: Db, gameId: string, matchId: string) {
   if (!g) throw new AuthError(404, "Not Found");
   const [m] = await db.select().from(matches).where(eq(matches.id, matchId));
   if (!m || (m.homeTeamId !== g.teamId && m.awayTeamId !== g.teamId)) throw new AuthError(409, "Choose a match your team played in");
-  await db.update(filmGames).set({ matchId, syncEventId: null, syncVideoMs: null }).where(eq(filmGames.id, gameId));
+  await db.delete(filmSyncPoints).where(eq(filmSyncPoints.gameId, gameId)); // points belong to the old match
+  await db.update(filmGames).set({ matchId }).where(eq(filmGames.id, gameId));
 }
 
 export async function unlinkMatch(db: Db, gameId: string) {
-  await db.update(filmGames).set({ matchId: null, syncEventId: null, syncVideoMs: null }).where(eq(filmGames.id, gameId));
+  await db.delete(filmSyncPoints).where(eq(filmSyncPoints.gameId, gameId));
+  await db.update(filmGames).set({ matchId: null }).where(eq(filmGames.id, gameId));
 }
 
 export async function setSync(db: Db, gameId: string, eventId: string, videoMs: number) {
@@ -42,7 +46,15 @@ export async function setSync(db: Db, gameId: string, eventId: string, videoMs: 
   const [e] = await db.select().from(matchEvents).where(and(eq(matchEvents.id, eventId), eq(matchEvents.matchId, g.matchId)));
   if (!e || e.type === "CORRECTION") throw new AuthError(409, "Choose an event from this match");
   if (!e.occurredAt) throw new AuthError(409, "That event has no recorded time, so it can't be used to line up the video");
-  await db.update(filmGames).set({ syncEventId: eventId, syncVideoMs: videoMs }).where(eq(filmGames.id, gameId));
+  const existing = await db.select({ eventId: filmSyncPoints.eventId }).from(filmSyncPoints).where(eq(filmSyncPoints.gameId, gameId));
+  if (existing.length >= MAX_SYNC_POINTS && !existing.some((p) => p.eventId === eventId)) throw new AuthError(409, `At most ${MAX_SYNC_POINTS} sync points`);
+  await db.insert(filmSyncPoints).values({ gameId, eventId, videoMs })
+    .onConflictDoUpdate({ target: [filmSyncPoints.gameId, filmSyncPoints.eventId], set: { videoMs } });
+}
+
+export async function removeSync(db: Db, gameId: string, eventId: string) {
+  const gone = await db.delete(filmSyncPoints).where(and(eq(filmSyncPoints.gameId, gameId), eq(filmSyncPoints.eventId, eventId))).returning({ e: filmSyncPoints.eventId });
+  if (gone.length === 0) throw new AuthError(404, "Not Found");
 }
 
 /**
@@ -66,8 +78,12 @@ export async function timeline(db: Db, gameId: string) {
   const ownIds = new Set(roster.filter((r) => r.teamId === g.teamId).map((r) => r.userId));
   const names = new Map(ownIds.size === 0 ? [] : (await db.select({ id: users.id, name: users.displayName }).from(users).where(inArray(users.id, [...ownIds]))).map((u) => [u.id, u.name]));
 
-  const anchor = g.syncEventId ? all.find((e) => e.id === g.syncEventId) : undefined;
-  const synced = !!anchor?.occurredAt && g.syncVideoMs !== null;
+  // Each event is placed from the sync point nearest to it in time, so a pause or cut in the video only skews what is near it.
+  const byId = new Map(all.map((e) => [e.id, e]));
+  const points = (await db.select().from(filmSyncPoints).where(eq(filmSyncPoints.gameId, gameId)))
+    .flatMap((p) => { const at = byId.get(p.eventId)?.occurredAt; return at ? [{ eventId: p.eventId, videoMs: p.videoMs, at }] : []; });
+  const synced = points.length > 0;
+  const nearest = (t: Date) => points.reduce((best, p) => (Math.abs(p.at.getTime() - t.getTime()) < Math.abs(best.at.getTime() - t.getTime()) ? p : best));
   let home = 0, away = 0;
   const items = [];
   let untimed = 0;
@@ -76,7 +92,8 @@ export async function timeline(db: Db, gameId: string) {
     if (pts && e.side === "home") home += pts;
     if (pts && e.side === "away") away += pts;
     if (!e.occurredAt) { untimed++; continue; }
-    const videoMs = synced ? videoMsOf(e.occurredAt, anchor!.occurredAt!, g.syncVideoMs!) : null;
+    const a = synced ? nearest(e.occurredAt) : null;
+    const videoMs = a ? videoMsOf(e.occurredAt, a.at, a.videoMs) : null;
     items.push({
       id: e.id, type: e.type, side: e.side, period: e.period, videoMs: videoMs !== null && videoMs >= 0 ? videoMs : null,
       jersey: e.playerId ? (jersey.get(e.playerId) ?? null) : null,
@@ -84,5 +101,5 @@ export async function timeline(db: Db, gameId: string) {
       homeScore: home, awayScore: away,
     });
   }
-  return { linked: true as const, synced, ours, items, untimed, syncEventId: g.syncEventId };
+  return { linked: true as const, synced, ours, items, untimed, syncPoints: points.map((p) => ({ eventId: p.eventId, videoMs: p.videoMs })) };
 }

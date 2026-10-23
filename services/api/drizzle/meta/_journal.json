@@ -120,6 +120,13 @@
       "when": 1792730306809,
       "tag": "0016_film_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792731003289,
+      "tag": "0017_film_sync_points",
+      "breakpoints": true
     }
   ]
 }

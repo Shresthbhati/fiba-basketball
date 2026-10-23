@@ -1,10 +1,10 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import { writeAudit } from "../audit/service.js";
 import { activeAssignments, grantRole } from "../authz/service.js";
 import { notify } from "../notifications/service.js";
 import { hasConsent } from "../consent/service.js";
 import type { Db } from "../db/index.js";
-import { filmClips, filmGames, roleAssignments, teams, users } from "../db/schema.js";
+import { filmClips, filmGames, filmSyncPoints, roleAssignments, teams, users } from "../db/schema.js";
 import { AuthError } from "../identity/service.js";
 
 export const TEAM_ROLES = ["COACH", "PLAYER"] as const;
@@ -56,7 +56,7 @@ export type Game = typeof filmGames.$inferSelect;
 const gameView = (g: Game) => ({
   id: g.id, teamId: g.teamId, title: g.title, opponent: g.opponent, playedOn: g.playedOn,
   video: { status: g.videoStatus, type: g.videoType, bytes: g.videoBytes },
-  matchId: g.matchId, synced: g.syncVideoMs !== null,
+  matchId: g.matchId, synced: false,
 });
 
 export async function createGame(db: Db, userId: string, teamId: string, input: { title: string; opponent?: string | undefined; playedOn?: string | undefined }) {
@@ -76,7 +76,8 @@ export async function findGame(db: Db, id: string): Promise<Game | null> {
 export async function readGame(db: Db, id: string) {
   const g = await findGame(db, id);
   if (!g) throw new AuthError(404, "Not Found");
-  return gameView(g);
+  const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(filmSyncPoints).where(eq(filmSyncPoints.gameId, id));
+  return { ...gameView(g), synced: n > 0 };
 }
 
 export async function markVideoReady(db: Db, id: string, v: { key: string; type: string; bytes: number }) {

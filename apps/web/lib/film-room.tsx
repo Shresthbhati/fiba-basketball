@@ -86,6 +86,23 @@ export function FilmRoom({ gameId }: { gameId: string }) {
     try { await api(`/film/games/${gameId}/sync`, { method: "PUT", body: { eventId: pickEvent, videoMs: now() } }); await loadGame(); await loadTimeline(); }
     catch (err) { setError(msg(err)); }
   }
+  async function removeSync(eventId: string) {
+    setError(null);
+    try { await api(`/film/games/${gameId}/sync/${eventId}`, { method: "DELETE" }); await loadGame(); await loadTimeline(); }
+    catch (err) { setError(msg(err)); }
+  }
+  const syncForm = (name: string, help: string) => (
+    <form aria-label={name} onSubmit={syncNow} style={{ display: "grid", gap: 8 }}>
+      <p>{help}</p>
+      <label>Basket
+        <select value={pickEvent} onChange={(e) => setPickEvent(e.target.value)} required>
+          <option value="">Choose…</option>
+          {timeline?.linked && timeline.items.filter((i) => SCORING_TYPES.has(i.type)).map((i) => <option key={i.id} value={i.id}>{timelineLabel(i, timeline.ours)}</option>)}
+        </select>
+      </label>
+      <button type="submit" disabled={game?.video.status !== "READY"}>Use the current video time for this basket</button>
+    </form>
+  );
   function jump(ms: number) {
     const v = video.current;
     if (!v) return;
@@ -142,18 +159,7 @@ export function FilmRoom({ gameId }: { gameId: string }) {
           <>
             {canManage && <p><button type="button" className="secondary" onClick={unlink}>Unlink match</button></p>}
             {!timeline.synced && !canManage && <p>The coach has not lined this film up with the scorebook yet.</p>}
-            {!timeline.synced && canManage && (
-              <form aria-label="Line up the video" onSubmit={syncNow} style={{ display: "grid", gap: 8 }}>
-                <p>Pause the video at the moment one of these baskets was scored, choose it, then press the button.</p>
-                <label>Basket
-                  <select value={pickEvent} onChange={(e) => setPickEvent(e.target.value)} required>
-                    <option value="">Choose…</option>
-                    {timeline.items.filter((i) => SCORING_TYPES.has(i.type)).map((i) => <option key={i.id} value={i.id}>{timelineLabel(i, timeline.ours)}</option>)}
-                  </select>
-                </label>
-                <button type="submit" disabled={game.video.status !== "READY"}>Use the current video time for this basket</button>
-              </form>
-            )}
+            {canManage && !timeline.synced && syncForm("Line up the video", "Pause the video at the moment one of these baskets was scored, choose it, then press the button.")}
             {timeline.untimed > 0 && <small>{timeline.untimed} scorebook event(s) have no recorded time and are not shown.</small>}
             {timeline.synced && (
               <ul aria-label="Scorebook timeline" style={{ listStyle: "none", padding: 0, display: "grid", gap: 4 }}>
@@ -162,7 +168,23 @@ export function FilmRoom({ gameId }: { gameId: string }) {
                 ))}
               </ul>
             )}
-            {canManage && timeline.synced && <small>Wrong spot? Unlink the match and link it again to redo the lineup.</small>}
+            {canManage && timeline.synced && (
+              <>
+                <ul aria-label="Sync points" style={{ listStyle: "none", padding: 0, display: "grid", gap: 4 }}>
+                  {timeline.syncPoints.map((p) => {
+                    const it = timeline.items.find((i) => i.id === p.eventId);
+                    return (
+                      <li key={p.eventId}>Video {fmtTime(p.videoMs)} = {it ? timelineLabel(it, timeline.ours) : "an event"}{" "}
+                        <button type="button" className="secondary" onClick={() => removeSync(p.eventId)} aria-label={`Remove sync point at ${fmtTime(p.videoMs)}`}>Remove</button></li>
+                    );
+                  })}
+                </ul>
+                <details>
+                  <summary>Add another sync point</summary>
+                  {syncForm("Add a sync point", "If the video was paused or cut, line up another basket after that point. Each event uses the nearest sync point.")}
+                </details>
+              </>
+            )}
           </>
         )}
       </section>
