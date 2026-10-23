@@ -4,7 +4,7 @@ import { NetworkError } from "../lib/api";
 import { ScorePanel } from "../lib/score-panel";
 import { ScoreQueue, type Post, type Saved, type Store } from "../lib/score-queue";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.clear(); });
 const store = (): Store => { const d = new Map<string, Saved>(); return { load: (k) => d.get(k) ?? null, save: (k, v) => void d.set(k, v) }; };
 const offline: Post = async () => { throw new NetworkError("offline"); };
 const online: Post = async (_p, body) => {
@@ -34,6 +34,34 @@ describe("ScorePanel", () => {
     render(<ScorePanel queue={q2} />);
     await act(async () => { fireEvent.click(screen.getByLabelText("Home +3 points")); });
     expect(screen.getByRole("status").textContent).toMatch(/All changes saved/);
+  });
+
+  it("stamps the game clock on each event, and the scorer can start, stop, set and reset it", async () => {
+    const q = new ScoreQueue("mc", offline, store());
+    render(<ScorePanel queue={q} />);
+    const timer = () => screen.getByRole("timer").textContent;
+    expect(timer()).toBe("10:00");
+    await act(async () => { fireEvent.click(screen.getByLabelText("Home +2 points")); });
+    expect(q.pending[0]!.clockSeconds).toBe(600);
+
+    fireEvent.change(screen.getByLabelText("Set clock"), { target: { value: "7:30" } });
+    fireEvent.click(screen.getByText("Set"));
+    expect(timer()).toBe("7:30");
+    await act(async () => { fireEvent.click(screen.getByLabelText("Away +3 points")); });
+    expect(q.pending[1]!.clockSeconds).toBe(450);
+
+    fireEvent.change(screen.getByLabelText("Set clock"), { target: { value: "nonsense" } });
+    fireEvent.click(screen.getByText("Set"));
+    expect(timer()).toBe("7:30");
+    expect(screen.getByText(/minutes:seconds/)).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Start clock"));
+    expect(screen.getByText("Stop clock")).toBeTruthy();
+    fireEvent.click(screen.getByText("Stop clock"));
+    expect(screen.getByText("Start clock")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Period"), { target: { value: "2" } });
+    expect(timer()).toBe("10:00");
   });
 
   it("shows the conflict dialog with both choices", async () => {
