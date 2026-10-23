@@ -25,6 +25,7 @@ import { registerReportRoutes } from "./film/report-routes.js";
 import { registerAssessment } from "./assessment/index.js";
 import { registerPlaybook } from "./playbook/index.js";
 import { registerPassportRoutes } from "./career/passport-routes.js";
+import { registerPracticeRoutes } from "./practice/routes.js";
 import { LocalDiskStorage, type MediaStorage } from "./media/storage.js";
 
 export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[]; mailer?: Mailer; webBaseUrl?: string; rateLimitScale?: number; requireVerifiedGuardianEmail?: boolean; storage?: MediaStorage; maxVideoBytes?: number; logger?: boolean; logStream?: { write(msg: string): void } } = {}): Promise<FastifyInstance> {
@@ -78,6 +79,7 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerPlaybook(app, db);
   registerReportRoutes(app, db);
   registerPassportRoutes(app, db);
+  registerPracticeRoutes(app, db);
   registerMatchScoring(app, db, new MatchBus());
 
   // Liveness: the process is up. Readiness: it can reach the database (use this for load balancer checks).

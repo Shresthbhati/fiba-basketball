@@ -571,6 +571,66 @@ export const verifiedAchievements = pgTable(
   (t) => [index("verified_achievements_user_idx").on(t.userId)],
 );
 
+/** Basketball practice drills catalog (WP-4.3, Master Spec §9.2). */
+export const practiceDrills = pgTable(
+  "practice_drills",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    category: text("category").notNull(), // WARMUP | TECHNICAL | TACTICAL | SCRIMMAGE | COOLDOWN
+    intensity: text("intensity").notNull().default("MEDIUM"), // LOW | MEDIUM | HIGH
+    suggestedDurationMins: integer("suggested_duration_mins").notNull().default(10),
+    brief: text("brief"),
+    playId: uuid("play_id").references(() => tacticalPlays.id, { onDelete: "set null" }),
+    clipId: uuid("clip_id").references(() => filmClips.id, { onDelete: "set null" }),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("practice_drills_team_idx").on(t.teamId)],
+);
+
+/** Sequenced team practice plans (WP-4.3, Master Spec §9.2). Team-scoped (ADR-0010). */
+export const practiceSessions = pgTable(
+  "practice_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    location: text("location"),
+    focus: text("focus"),
+    notes: text("notes"),
+    blocks: jsonb("blocks").$type<Array<{
+      id: string;
+      order: number;
+      drillId?: string | undefined;
+      title: string;
+      category: "WARMUP" | "TECHNICAL" | "TACTICAL" | "SCRIMMAGE" | "COOLDOWN";
+      durationMins: number;
+      notes?: string | undefined;
+      playId?: string | undefined;
+      clipId?: string | undefined;
+    }>>().notNull().default([]),
+    totalDurationMins: integer("total_duration_mins").notNull().default(0),
+    attendance: jsonb("attendance").$type<Array<{
+      userId: string;
+      status: "PRESENT" | "ABSENT" | "EXCUSED" | "INJURED";
+      note?: string | undefined;
+    }>>().notNull().default([]),
+    status: text("status").notNull().default("SCHEDULED"), // SCHEDULED | IN_PROGRESS | COMPLETED | CANCELLED
+    createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("practice_sessions_team_idx").on(t.teamId),
+    index("practice_sessions_scheduled_idx").on(t.scheduledAt),
+  ],
+);
+
+
 
 
 
