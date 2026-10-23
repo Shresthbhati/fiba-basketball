@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { ApiError, api } from "../../lib/api";
+import { MySeries } from "../../lib/my-series";
 import { phaseLabel, when, type Game } from "../../lib/game-types";
 
 export default function PickupList() {
@@ -34,6 +35,7 @@ export default function PickupList() {
   return (
     <main>
       <h1>Pickup games</h1>
+      <MySeries />
       <form onSubmit={search} style={{ display: "grid", gap: 12, maxWidth: 420 }}>
         <label>Latitude<input value={lat} onChange={(e) => setLat(e.target.value)} inputMode="decimal" required /></label>
         <label>Longitude<input value={lng} onChange={(e) => setLng(e.target.value)} inputMode="decimal" required /></label>

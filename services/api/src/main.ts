@@ -1,6 +1,7 @@
 import { buildApp } from "./app.js";
 import { loadConfig, productionProblems } from "./config.js";
 import { connect } from "./db/connect.js";
+import { materializeAll } from "./pickup/series.js";
 import { LocalDiskStorage } from "./media/storage.js";
 import { createMailer } from "./identity/mailer-factory.js";
 
@@ -12,7 +13,8 @@ if (problems.length > 0) {
 }
 if (!cfg.DATABASE_URL) throw new Error("DATABASE_URL is required");
 
-const app = await buildApp(await connect(cfg.DATABASE_URL), {
+const db = await connect(cfg.DATABASE_URL);
+const app = await buildApp(db, {
   logger: true,
   secureCookies: cfg.NODE_ENV === "production",
   requireVerifiedGuardianEmail: cfg.NODE_ENV === "production",
@@ -24,3 +26,8 @@ const app = await buildApp(await connect(cfg.DATABASE_URL), {
   ...(cfg.WEB_BASE_URL ? { webBaseUrl: cfg.WEB_BASE_URL } : {}),
 });
 await app.listen({ port: cfg.PORT, host: "0.0.0.0" });
+
+// Keep recurring pickup games created a few weeks ahead (idempotent, so overlapping runs or several instances are harmless).
+const refreshSeries = () => materializeAll(db).catch((e) => app.log.error({ err: e }, "recurring pickup refresh failed"));
+await refreshSeries();
+setInterval(refreshSeries, 60 * 60 * 1000).unref();
