@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import { ApiError, api } from "./api";
+import { GameClock, formatClock, parseClock } from "./game-clock";
 import { ScoreQueue, type Side } from "./score-queue";
 
 const label: Record<string, string> = {
@@ -25,6 +26,15 @@ export function ScorePanel({ queue, onFinalize, info, rosters }: { queue: ScoreQ
   // The player each side's next events are credited to. Stays selected until changed, so a run of baskets is one tap each.
   const [chosen, setChosen] = useState<{ home: string | null; away: string | null }>({ home: null, away: null });
 
+  // The game clock is the scorer's own: started and stopped by hand, and stamped on every event they enter.
+  const clock = useMemo(() => new GameClock(`ciq.clock.${queue.id}`), [queue]);
+  const [clockText, setClockText] = useState("");
+  useEffect(() => clock.subscribe(rerender), [clock]);
+  useEffect(() => {
+    if (clock.period !== period) setPeriod(clock.period); // a reload restores the period the clock was on
+    const t = setInterval(() => { clock.tick(); if (clock.running) rerender(); }, 250);
+    return () => clearInterval(t);
+  }, [clock]);
   useEffect(() => queue.subscribe(rerender), [queue]);
   useEffect(() => {
     void queue.sync();
@@ -36,7 +46,7 @@ export function ScorePanel({ queue, onFinalize, info, rosters }: { queue: ScoreQ
 
   const add = (type: string, side?: Side) => {
     const playerId = side && PLAYER_EVENTS.has(type) ? chosen[side] : null;
-    queue.add(type, { ...(side ? { side } : {}), period, ...(playerId ? { playerId } : {}) });
+    queue.add(type, { ...(side ? { side } : {}), period, clockSeconds: clock.seconds, ...(playerId ? { playerId } : {}) });
     void queue.sync();
   };
   const { home, away } = queue.score;
@@ -96,11 +106,32 @@ export function ScorePanel({ queue, onFinalize, info, rosters }: { queue: ScoreQ
 
       <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
         Period
-        <select value={period} onChange={(e) => setPeriod(Number(e.target.value))}>
+        <select value={period} onChange={(e) => { const p = Number(e.target.value); setPeriod(p); clock.startPeriod(p); }}>
           {[1, 2, 3, 4, 5, 6, 7].map((p) => <option key={p} value={p}>{p <= 4 ? `Q${p}` : `OT${p - 4}`}</option>)}
         </select>
-        <button className="secondary" onClick={() => add("PERIOD_START")}>Start period</button>
+        <button className="secondary" onClick={() => { clock.startPeriod(period); clock.start(); add("PERIOD_START"); }}>Start period</button>
       </label>
+
+      <section aria-label="Game clock" style={{ background: "var(--surface)", borderRadius: 12, padding: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div role="timer" aria-label="Game clock" style={{ fontSize: 40, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{formatClock(clock.seconds)}</div>
+        <button onClick={() => (clock.running ? clock.stop() : clock.start())} disabled={!clock.running && clock.seconds === 0} style={{ minHeight: 48 }}>
+          {clock.running ? "Stop clock" : "Start clock"}
+        </button>
+        <form style={{ display: "flex", gap: 6, alignItems: "center" }} onSubmit={(e) => {
+          e.preventDefault();
+          const v = parseClock(clockText);
+          if (v === null) { setMsg("Enter the time as minutes:seconds, for example 7:30."); return; }
+          setMsg(null); clock.set(v); setClockText("");
+        }}>
+          <label>Set clock <input value={clockText} onChange={(e) => setClockText(e.target.value)} placeholder="7:30" size={5} inputMode="numeric" /></label>
+          <button type="submit" className="secondary">Set</button>
+        </form>
+        <label>Period length
+          <select value={clock.lengthSeconds} onChange={(e) => clock.setLength(Number(e.target.value))}>
+            {[300, 480, 600, 720].map((s) => <option key={s} value={s}>{s / 60} min</option>)}
+          </select>
+        </label>
+      </section>
 
       {team("home", homeName)}
       {team("away", awayName)}

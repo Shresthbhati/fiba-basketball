@@ -74,6 +74,18 @@ test("box score: score with players picked from rosters, then see the box score 
   await expect(org.locator("main").getByRole("status").first()).toContainText("All changes saved");
   await expect(comets.getByLabel(/./).first()).toBeVisible();
 
+  // The game clock is stamped on events: the first baskets were at the full 10:00; after setting 7:30 a timeout is stamped 7:30.
+  await expect(org.getByRole("timer")).toHaveText("10:00");
+  await org.getByLabel("Set clock").fill("7:30");
+  await org.getByRole("button", { name: "Set", exact: true }).click();
+  await expect(org.getByRole("timer")).toHaveText("7:30");
+  await comets.getByRole("button", { name: "Timeout", exact: true }).click();
+  await expect(org.locator("main").getByRole("status").first()).toContainText("All changes saved");
+  const matchId = /([0-9a-f-]{36})/.exec(org.url())![1]!;
+  const logged = (await (await org.request.get(`/api/v1/matches/${matchId}/events`)).json()) as { items: { type: string; clockSeconds: number | null }[] };
+  expect(logged.items.find((e) => e.type === "THREE_POINT")?.clockSeconds).toBe(600);
+  expect(logged.items.find((e) => e.type === "TIMEOUT")?.clockSeconds).toBe(450);
+
   // Before the game is official nobody has a record; the player's own page is empty.
   await pia.page.goto("/career");
   await expect(pia.page.getByText(/No official games yet/)).toBeVisible();

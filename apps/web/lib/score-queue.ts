@@ -43,6 +43,7 @@ export class ScoreQueue {
   private emit() { this.store.save(this.key, this.s); this.listeners.forEach((l) => l()); }
   subscribe(fn: () => void): () => void { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
 
+  get id() { return this.matchId; }
   get pendingCount() { return this.s.pending.length; }
   get pending() { return this.s.pending; }
   get serverState() { return this.s.server; }
