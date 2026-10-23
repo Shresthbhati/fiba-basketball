@@ -630,6 +630,59 @@ export const practiceSessions = pgTable(
   ],
 );
 
+/** Scouting Montages & Highlight Playlists (WP-3.3, Master Spec §6.5). Team-scoped; private to members (ADR-0010). */
+export const scoutingMontages = pgTable(
+  "scouting_montages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    items: jsonb("items").$type<Array<{
+      clipId: string;
+      gameId: string;
+      order: number;
+      startMs: number;
+      endMs: number;
+      title?: string | undefined;
+      note?: string | undefined;
+      tags?: string[] | undefined;
+    }>>().notNull().default([]),
+    totalDurationMs: integer("total_duration_ms").notNull().default(0),
+    createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("scouting_montages_team_idx").on(t.teamId),
+    index("scouting_montages_created_by_idx").on(t.createdBy),
+  ],
+);
+
+/** Film Saved Searches for tactical discovery & film library (WP-3.3). */
+export const filmSavedSearches = pgTable(
+  "film_saved_searches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    filters: jsonb("filters").$type<{
+      q?: string | undefined;
+      tag?: string | undefined;
+      gameId?: string | undefined;
+      minDurationMs?: number | undefined;
+      maxDurationMs?: number | undefined;
+    }>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("film_saved_searches_team_user_idx").on(t.teamId, t.userId),
+  ],
+);
+
+
 
 
 

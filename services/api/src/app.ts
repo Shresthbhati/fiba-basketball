@@ -22,6 +22,7 @@ import { registerTrust } from "./trust/routes.js";
 import { registerNotifications } from "./notifications/routes.js";
 import { registerFilm } from "./film/routes.js";
 import { registerReportRoutes } from "./film/report-routes.js";
+import { registerFilmSearchRoutes } from "./film/search-routes.js";
 import { registerAssessment } from "./assessment/index.js";
 import { registerPlaybook } from "./playbook/index.js";
 import { registerPassportRoutes } from "./career/passport-routes.js";
@@ -75,6 +76,7 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerNotifications(app, db);
   registerTraining(app, db);
   registerFilm(app, db, opts.storage ?? new LocalDiskStorage(join(tmpdir(), "courtiq-media")), opts.maxVideoBytes ?? 1024 ** 3);
+  registerFilmSearchRoutes(app, db);
   registerAssessment(app, db, opts.storage ?? new LocalDiskStorage(join(tmpdir(), "courtiq-media")));
   registerPlaybook(app, db);
   registerReportRoutes(app, db);
