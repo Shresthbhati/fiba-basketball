@@ -1,6 +1,7 @@
 import { and, eq, gt, inArray } from "drizzle-orm";
 import type { Db } from "../db/index.js";
 import { courts, pickupGames, pickupParticipants, pickupSeries } from "../db/schema.js";
+import { notifyGameCancelled } from "./service.js";
 import { AuthError } from "../identity/service.js";
 
 export const HORIZON_DAYS = 28;
@@ -108,10 +109,11 @@ export async function cancelSeries(db: Db, seriesId: string, hostId: string, now
   const [s] = await db.select().from(pickupSeries).where(eq(pickupSeries.id, seriesId));
   if (!s || s.hostId !== hostId) throw new AuthError(404, "Not Found");
   await db.update(pickupSeries).set({ active: false }).where(eq(pickupSeries.id, seriesId));
-  const upcoming = await db.select({ id: pickupGames.id }).from(pickupGames)
+  const upcoming = await db.select().from(pickupGames)
     .where(and(eq(pickupGames.seriesId, seriesId), eq(pickupGames.status, "OPEN"), gt(pickupGames.startsAt, now)));
   if (upcoming.length > 0) {
     await db.update(pickupGames).set({ status: "CANCELLED" }).where(inArray(pickupGames.id, upcoming.map((g) => g.id)));
+    for (const g of upcoming) await notifyGameCancelled(db, g);
   }
   return { cancelledGames: upcoming.length };
 }

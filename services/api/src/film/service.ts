@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { writeAudit } from "../audit/service.js";
 import { activeAssignments, grantRole } from "../authz/service.js";
+import { notify } from "../notifications/service.js";
 import { hasConsent } from "../consent/service.js";
 import type { Db } from "../db/index.js";
 import { filmClips, filmGames, roleAssignments, teams, users } from "../db/schema.js";
@@ -37,6 +38,8 @@ export async function addMember(db: Db, actorId: string, teamId: string, emailRa
   const [existing] = await db.select().from(roleAssignments).where(and(team(teamId), eq(roleAssignments.userId, u.id)));
   if (existing) return { userId: u.id, name: u.displayName, role: existing.role };
   await grantRole(db, u.id, role, { type: "team", id: teamId });
+  const [t] = await db.select({ name: teams.name }).from(teams).where(eq(teams.id, teamId));
+  await notify(db, [u.id], { kind: "ADDED_TO_TEAM", title: `You were added to ${t?.name ?? "a team"}`, link: `/teams/${teamId}` });
   await writeAudit(db, { actorId, action: "team.member_added", resourceType: "team", resourceId: teamId, metadata: { userId: u.id, role } });
   return { userId: u.id, name: u.displayName, role };
 }

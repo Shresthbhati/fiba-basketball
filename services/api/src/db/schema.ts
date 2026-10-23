@@ -388,3 +388,19 @@ export const filmClips = pgTable(
   },
   (t) => [index("film_clips_game_idx").on(t.gameId)],
 );
+
+/** In-app notifications. Private to `user_id`; they never name or reveal other users. */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // GAME_CANCELLED | WAITLIST_PROMOTED | ADDED_TO_TEAM
+    title: text("title").notNull(),
+    link: text("link"), // in-app path, e.g. /pickup/<id>
+    data: jsonb("data").$type<Record<string, string>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.createdAt)],
+);

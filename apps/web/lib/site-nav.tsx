@@ -2,6 +2,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { ApiError, api, type Me } from "./api";
+import { inboxQuery } from "./notifications-panel";
 import { SyncIndicator } from "./sync-indicator";
 import { VerifyBanner } from "./verify-banner";
 
@@ -13,6 +14,8 @@ export function SiteNav() {
     retry: false,
   });
   const user = me.data;
+  const inbox = useQuery({ ...inboxQuery, enabled: !!user });
+  const unread = inbox.data?.unread ?? 0;
   return (
     <>
     {user && !user.emailVerified && <VerifyBanner />}
@@ -27,6 +30,7 @@ export function SiteNav() {
         <SyncIndicator />
         {user ? (
           <>
+            <Link href="/notifications" aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}>Notifications{unread > 0 ? ` (${unread > 99 ? "99+" : unread})` : ""}</Link>
             <Link href="/safety">Safety</Link>
             <span>{user.displayName}</span>
             <button className="secondary" style={{ minHeight: 36, padding: "4px 12px" }} onClick={async () => {

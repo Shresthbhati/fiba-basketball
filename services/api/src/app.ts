@@ -19,6 +19,7 @@ import { ConsoleMailer, type Mailer } from "./identity/mailer.js";
 import { registerIdentity } from "./identity/routes.js";
 import { registerConsent } from "./consent/routes.js";
 import { registerTrust } from "./trust/routes.js";
+import { registerNotifications } from "./notifications/routes.js";
 import { registerFilm } from "./film/routes.js";
 import { LocalDiskStorage, type MediaStorage } from "./media/storage.js";
 
@@ -66,6 +67,7 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerCourts(app, db);
   registerPickup(app, db);
   registerCompetitions(app, db);
+  registerNotifications(app, db);
   registerTraining(app, db);
   registerFilm(app, db, opts.storage ?? new LocalDiskStorage(join(tmpdir(), "courtiq-media")), opts.maxVideoBytes ?? 1024 ** 3);
   registerMatchScoring(app, db, new MatchBus());
