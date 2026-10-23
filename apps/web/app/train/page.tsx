@@ -36,6 +36,8 @@ export default function Train() {
         <Link href="/train/assessments">Player Lab Assessments</Link>
         {" · "}
         <Link href="/train/testing">Combine & Athletic Testing</Link>
+        {" · "}
+        <Link href="/train/programs">Periodized Programs</Link>
       </p>
       {error && <p role="alert" style={{ color: "#ff6b6b" }}>{error}</p>}
       <section aria-label="Recent workouts">

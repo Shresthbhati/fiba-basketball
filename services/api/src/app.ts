@@ -15,6 +15,7 @@ import { registerCompetitions } from "./competition/routes.js";
 import { registerCourts } from "./court/routes.js";
 import { registerTraining } from "./training/routes.js";
 import { registerAthleticTesting } from "./training/testing-routes.js";
+import { registerPeriodizationPrograms } from "./training/program-routes.js";
 import { registerPickup } from "./pickup/routes.js";
 import { ConsoleMailer, type Mailer } from "./identity/mailer.js";
 import { registerIdentity } from "./identity/routes.js";
@@ -78,6 +79,7 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerNotifications(app, db);
   registerTraining(app, db);
   registerAthleticTesting(app, db);
+  registerPeriodizationPrograms(app, db);
   registerFilm(app, db, opts.storage ?? new LocalDiskStorage(join(tmpdir(), "courtiq-media")), opts.maxVideoBytes ?? 1024 ** 3);
   registerFilmSearchRoutes(app, db);
   registerAssessment(app, db, opts.storage ?? new LocalDiskStorage(join(tmpdir(), "courtiq-media")));

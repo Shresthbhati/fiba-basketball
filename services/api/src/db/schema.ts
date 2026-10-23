@@ -851,6 +851,86 @@ export const athleticTestAttempts = pgTable(
   ],
 );
 
+export interface PrescribedExerciseItem {
+  exerciseId?: string | undefined;
+  exerciseSlug: string;
+  exerciseName: string;
+  orderIndex: number;
+  targetSets: number;
+  targetReps: number;
+  targetRpe?: number | undefined;
+  restSeconds?: number | undefined;
+  notes?: string | undefined;
+}
+
+/** Basketball-specific periodized training programs (WP-6.1, Master Spec §5). */
+export const trainingPrograms = pgTable(
+  "training_programs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: varchar("slug", { length: 80 }).notNull().unique(),
+    name: varchar("name", { length: 150 }).notNull(),
+    phase: varchar("phase", { length: 32 }).notNull(), // OFF_SEASON | PRE_SEASON | IN_SEASON | TOURNAMENT_PEAK
+    description: text("description").notNull(),
+    durationWeeks: integer("duration_weeks").notNull().default(4),
+    daysPerWeek: integer("days_per_week").notNull().default(3),
+    targetLevel: varchar("target_level", { length: 32 }).notNull().default("INTERMEDIATE"), // BEGINNER | INTERMEDIATE | ADVANCED | ELITE
+    primaryGoal: varchar("primary_goal", { length: 64 }).notNull(), // VERTICAL_POWER | HYPERTROPHY_BASE | REPEAT_SPRINT_ABILITY | FATIGUE_MANAGEMENT | TOURNAMENT_READINESS
+    isTemplate: boolean("is_template").notNull().default(true),
+    creatorId: uuid("creator_id").references(() => users.id, { onDelete: "set null" }),
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "set null" }),
+    reviewed: boolean("reviewed").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("training_programs_phase_idx").on(t.phase),
+    index("training_programs_team_idx").on(t.teamId),
+  ],
+);
+
+/** Prescribed workout days within a periodized training program (WP-6.1). */
+export const trainingProgramWorkouts = pgTable(
+  "training_program_workouts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    programId: uuid("program_id").notNull().references(() => trainingPrograms.id, { onDelete: "cascade" }),
+    weekNumber: integer("week_number").notNull(),
+    dayNumber: integer("day_number").notNull(),
+    title: varchar("title", { length: 150 }).notNull(),
+    focus: varchar("focus", { length: 64 }).notNull(),
+    estimatedDurationMin: integer("estimated_duration_min").notNull().default(45),
+    exercisesPrescription: jsonb("exercises_prescription").$type<PrescribedExerciseItem[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("training_program_workouts_program_idx").on(t.programId, t.weekNumber, t.dayNumber),
+  ],
+);
+
+/** Athlete enrollments and adherence tracking for training programs (WP-6.1). */
+export const programEnrollments = pgTable(
+  "program_enrollments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    programId: uuid("program_id").notNull().references(() => trainingPrograms.id, { onDelete: "cascade" }),
+    athleteId: uuid("athlete_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    assignedByUserId: uuid("assigned_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    startDate: date("start_date", { mode: "string" }).notNull(),
+    currentWeek: integer("current_week").notNull().default(1),
+    status: varchar("status", { length: 32 }).notNull().default("ACTIVE"), // ACTIVE | PAUSED | COMPLETED | CANCELLED
+    completedWorkoutIds: jsonb("completed_workout_ids").$type<string[]>().notNull().default([]),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("program_enrollments_athlete_idx").on(t.athleteId, t.status),
+    index("program_enrollments_program_idx").on(t.programId),
+  ],
+);
+
+
 
 
 
