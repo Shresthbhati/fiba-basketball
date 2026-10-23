@@ -22,6 +22,11 @@ In production the API exits 1 at start-up and lists every problem if the require
 - `GET /health` — process is up (liveness).
 - `GET /ready` — runs `select 1`; 503 `{"status":"NOT_READY"}` if the database is unreachable (readiness).
 
+## Background jobs (inside the API process)
+- Every minute: email pending notifications (`notifications/email.ts`). Needs working `SMTP_URL`; failures are logged and retried 3 times.
+- Every hour: top up recurring pickup games four weeks ahead (`pickup/series.ts`).
+Both are idempotent and safe if you run several API instances. Check `email_state` counts in `notifications` if people say they got no email.
+
 ## Common tasks
 
 - **Migrations:** applied automatically when the API starts (`services/api/src/db/connect.ts`). Take a backup before deploying a new version.

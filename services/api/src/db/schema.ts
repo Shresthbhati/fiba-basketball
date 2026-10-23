@@ -8,6 +8,8 @@ export const users = pgTable("users", {
   dateOfBirth: date("date_of_birth", { mode: "string" }).notNull(),
   isMinor: boolean("is_minor").notNull(),
   emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  // Opt-out for notification emails (see notifications/email.ts). Under-18 accounts are never emailed regardless.
+  emailNotifications: boolean("email_notifications").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -401,6 +403,9 @@ export const notifications = pgTable(
     data: jsonb("data").$type<Record<string, string>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     readAt: timestamp("read_at", { withTimezone: true }),
+    // Email delivery: null = not yet handled, SENDING = claimed, SENT, SKIPPED (read/opted out/minor/too old), FAILED (gave up).
+    emailState: text("email_state"),
+    emailAttempts: integer("email_attempts").notNull().default(0),
   },
   (t) => [index("notifications_user_idx").on(t.userId, t.createdAt)],
 );

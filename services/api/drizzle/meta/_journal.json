@@ -92,6 +92,13 @@
       "when": 1792726240563,
       "tag": "0012_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792726743843,
+      "tag": "0013_notification_email",
+      "breakpoints": true
     }
   ]
 }
