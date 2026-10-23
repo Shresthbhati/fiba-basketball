@@ -162,6 +162,8 @@ export function ScorePanel({ queue, onFinalize, info, rosters }: { queue: ScoreQ
           {[1, 2, 3, 4, 5, 6, 7].map((p) => <option key={p} value={p}>{p <= 4 ? `Q${p}` : `OT${p - 4}`}</option>)}
         </select>
         <button className="secondary" onClick={() => { clock.startPeriod(period); clock.start(); add("PERIOD_START"); }}>Start period</button>
+        <button className="secondary" onClick={() => { clock.stop(); add("PERIOD_END"); }}
+          title="Stops the clock and records how much time was left. Minutes played use this when a period ends early.">End period</button>
       </label>
 
       <section aria-label="Game clock" style={{ background: "var(--surface)", borderRadius: 12, padding: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>

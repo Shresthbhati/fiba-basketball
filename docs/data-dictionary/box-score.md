@@ -36,11 +36,11 @@ Computed on request from the event log (`match/minutes.ts`), never stored. Time 
 a starter is credited from the period's length, a substituted player from when they came on, to when they left or the period ended.
 - Period length = the clock on that period's `PERIOD_START`; if missing, the highest clock seen in that period; a period with neither is not counted.
 - The lineup carries into the next period. A period ends at its `PERIOD_END` clock, otherwise 0:00. A period that really ended early with no
-  `PERIOD_END` is over-counted: the scorer should tap period end for an early finish (the web scorer does not have that button yet).
+  `PERIOD_END` is over-counted: the web scorer's "End period" button stops the clock and records the time left as a `PERIOD_END`.
 - A substitution with no clock applies at the last clock seen. Corrected events are ignored. Negative spans are clamped to 0.
 - A team with no substitution recorded has no minutes: `seconds` is `null` in the box score (the web hides the MIN column), never 0.
   On a team that has a lineup, a player never put on court shows 0.
 - Career (`/me/career`): `minutes {games, total, perGame}` counts only games where the player's side had a lineup (`games` = those games),
   so untracked games never dilute the average; each recent game carries `seconds` (null if untracked).
 
-Not built: plus-minus, per-minute stats, a scorer button for ending a period early, a shared (server-side) lineup between scorers, shot locations, exporting stats.
+Not built: plus-minus, per-minute stats, a shared (server-side) lineup between scorers, shot locations, exporting stats.

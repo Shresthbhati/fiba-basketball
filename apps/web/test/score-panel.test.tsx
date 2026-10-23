@@ -60,6 +60,14 @@ describe("ScorePanel", () => {
     fireEvent.click(screen.getByText("Stop clock"));
     expect(screen.getByText("Start clock")).toBeTruthy();
 
+    // Ending a period early records the time left on the clock and stops it.
+    fireEvent.change(screen.getByLabelText("Set clock"), { target: { value: "1:15" } });
+    fireEvent.click(screen.getByText("Set"));
+    fireEvent.click(screen.getByText("Start clock"));
+    await act(async () => { fireEvent.click(screen.getByText("End period")); });
+    expect(q.pending.at(-1)).toMatchObject({ type: "PERIOD_END", period: 1, clockSeconds: 75 });
+    expect(screen.getByText("Start clock")).toBeTruthy(); // stopped
+
     fireEvent.change(screen.getByLabelText("Period"), { target: { value: "2" } });
     expect(timer()).toBe("10:00");
   });
