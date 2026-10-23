@@ -6,14 +6,17 @@ import { NotificationsPanel } from "../lib/notifications-panel";
 let calls: { key: string; body?: unknown }[];
 let inbox: { items: object[]; unread: number };
 let status = 200;
+let settings: { email: boolean; emailAvailable: boolean };
 
 beforeEach(() => {
-  calls = []; status = 200;
+  calls = []; status = 200; settings = { email: true, emailAvailable: true };
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: { method?: string; body?: unknown }) => {
     const key = `${init?.method ?? "GET"} ${url.replace("/api/v1", "")}`;
     calls.push({ key, body: init?.body });
     if (status !== 200) return Response.json({ title: "Not signed in" }, { status });
     if (key === "GET /notifications") return Response.json(inbox);
+    if (key === "GET /notifications/settings") return Response.json(settings);
+    if (key === "PUT /notifications/settings") { settings = { ...settings, email: JSON.parse(String(init?.body)).email }; return new Response(null, { status: 204 }); }
     if (key === "POST /notifications/read") { inbox = { items: inbox.items.map((n) => ({ ...n, read: true })), unread: 0 }; return new Response(null, { status: 204 }); }
     return new Response(null, { status: 204 });
   }));
@@ -53,5 +56,34 @@ describe("NotificationsPanel", () => {
     status = 401; inbox = { items: [], unread: 0 };
     wrap();
     expect(await screen.findByRole("link", { name: "Log in" })).toBeTruthy();
+  });
+
+  it("lets people turn email off and on, and saves each choice", async () => {
+    inbox = { items: [], unread: 0 };
+    wrap();
+    const box = (await screen.findByLabelText(/Email me when a game is cancelled/)) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    await waitFor(() => expect(calls.find((c) => c.key === "PUT /notifications/settings")?.body).toBe(JSON.stringify({ email: false })));
+    await waitFor(() => expect((screen.getByLabelText(/Email me when/) as HTMLInputElement).checked).toBe(false));
+  });
+
+  it("switches the checkbox straight away and puts it back with a message if saving fails", async () => {
+    inbox = { items: [], unread: 0 };
+    wrap();
+    const box = (await screen.findByLabelText(/Email me when/)) as HTMLInputElement;
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: { method?: string }) =>
+      init?.method === "PUT" ? Response.json({ title: "Server error" }, { status: 500 }) : Response.json(url.endsWith("/settings") ? settings : inbox)));
+    fireEvent.click(box);
+    expect(box.checked).toBe(false); // immediate
+    expect((await screen.findByRole("alert")).textContent).toBe("Server error");
+    await waitFor(() => expect(box.checked).toBe(true));
+  });
+
+  it("tells under-18 accounts email is not available instead of offering a switch", async () => {
+    inbox = { items: [], unread: 0 }; settings = { email: true, emailAvailable: false };
+    wrap();
+    expect(await screen.findByText(/not available for under-18 accounts/)).toBeTruthy();
+    expect(screen.queryByLabelText(/Email me when/)).toBeNull();
   });
 });

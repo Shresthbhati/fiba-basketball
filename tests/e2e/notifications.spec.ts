@@ -51,6 +51,12 @@ test("notifications: a player hears the game was cancelled, sees the count, open
   await player.getByRole("link", { name: "Notifications, 1 unread" }).click();
   await expect(player.getByRole("heading", { name: "Notifications" })).toBeVisible();
   await expect(player.getByText("(unread)")).toHaveCount(1);
+  // The email preference is on by default, can be turned off, and the choice survives a reload.
+  const emailBox = player.getByLabel(/Email me when a game is cancelled/);
+  await expect(emailBox).toBeChecked();
+  await emailBox.uncheck();
+  await player.reload();
+  await expect(player.getByLabel(/Email me when a game is cancelled/)).not.toBeChecked();
   await player.getByRole("link", { name: `Cancelled: "Cancel me ${run}"` }).click();
   await expect(player).toHaveURL(gameUrl);
   await expect(player.getByRole("link", { name: "Notifications" })).toBeVisible(); // no unread count any more
