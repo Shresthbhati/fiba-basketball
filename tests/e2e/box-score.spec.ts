@@ -74,6 +74,13 @@ test("box score: score with players picked from rosters, then see the box score 
   await expect(org.locator("main").getByRole("status").first()).toContainText("All changes saved");
   await expect(comets.getByLabel(/./).first()).toBeVisible();
 
+  // Before the game is official nobody has a record; the player's own page is empty.
+  await pia.page.goto("/career");
+  await expect(pia.page.getByText(/No official games yet/)).toBeVisible();
+  org.on("dialog", (d) => void d.accept()); // "Finish game?" confirm
+  await org.getByRole("button", { name: "Finish game" }).click();
+  await expect(org.getByText("Game finalized.")).toBeVisible();
+
   // Organizer's competition page: names + numbers. A signed-out visitor: numbers only.
   await org.goto(competitionUrl);
   const matchRow = org.getByRole("listitem", { name: /Match/ });
@@ -90,4 +97,17 @@ test("box score: score with players picked from rosters, then see the box score 
   const fanBox = fanRow.getByRole("table", { name: "Comets box score" });
   await expect(fanBox.getByRole("row", { name: /#7/ })).toContainText("5");
   await expect(fan.getByText("Pia Guard")).toHaveCount(0); // names are not public
+
+  // Once official, the player sees their own record (3 + 2 points), private to them; a visitor is asked to log in.
+  await pia.page.goto("/career");
+  const totals = pia.page.getByRole("region", { name: "Career totals" });
+  await expect(totals).toContainText("Games played 1");
+  await expect(totals).toContainText("Points 5 · 5 per game");
+  await expect(pia.page.getByRole("region", { name: `Box Cup ${run}` })).toContainText("vs Blazers");
+  await expect(pia.page.getByText("Only you can see this")).toBeVisible();
+  await fan.goto("/career");
+  await expect(fan.locator("main").getByRole("link", { name: "Log in" })).toBeVisible();
+  // The other team's player has their own, different record.
+  await sam.page.goto("/career");
+  await expect(sam.page.getByRole("region", { name: "Career totals" })).toContainText("Points 2 · 2 per game");
 });
