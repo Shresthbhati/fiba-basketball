@@ -21,6 +21,7 @@ import { registerConsent } from "./consent/routes.js";
 import { registerTrust } from "./trust/routes.js";
 import { registerNotifications } from "./notifications/routes.js";
 import { registerFilm } from "./film/routes.js";
+import { registerReportRoutes } from "./film/report-routes.js";
 import { registerAssessment } from "./assessment/index.js";
 import { registerPlaybook } from "./playbook/index.js";
 import { LocalDiskStorage, type MediaStorage } from "./media/storage.js";
@@ -74,6 +75,7 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerFilm(app, db, opts.storage ?? new LocalDiskStorage(join(tmpdir(), "courtiq-media")), opts.maxVideoBytes ?? 1024 ** 3);
   registerAssessment(app, db, opts.storage ?? new LocalDiskStorage(join(tmpdir(), "courtiq-media")));
   registerPlaybook(app, db);
+  registerReportRoutes(app, db);
   registerMatchScoring(app, db, new MatchBus());
 
   // Liveness: the process is up. Readiness: it can reach the database (use this for load balancer checks).

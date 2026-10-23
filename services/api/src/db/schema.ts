@@ -497,4 +497,40 @@ export const tacticalPlays = pgTable(
   ],
 );
 
+/** Evidence-linked tactical reports (WP-3.5, Master Spec §6.4, §12). Team-scoped; private to members (ADR-0010). */
+export const tacticalReports = pgTable(
+  "tactical_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    summary: text("summary"),
+    createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    blocks: jsonb("blocks").$type<Array<{
+      id: string;
+      title: string;
+      claimType: "OBSERVED" | "DERIVED" | "HYPOTHESIS";
+      statement: string;
+      sampleSize?: number | undefined;
+      confidence?: number | undefined;
+      citations: Array<{
+        citationType: "CLIP" | "EVENT" | "METRIC";
+        targetId: string;
+        gameId?: string | undefined;
+        timestampMs?: number | undefined;
+        note?: string | undefined;
+      }>;
+    }>>().notNull().default([]),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("tactical_reports_team_idx").on(t.teamId),
+    index("tactical_reports_created_by_idx").on(t.createdBy),
+  ],
+);
+
+
 
