@@ -18,12 +18,20 @@ export const eventInput = z.object({
   clockSeconds: z.number().int().min(0).max(3600).optional(),
   correctsEventId: z.uuid().optional(),
   playerId: z.uuid().optional(),
+  occurredAt: z.iso.datetime({ offset: true }).optional(),
 });
 export const batchInput = z.object({
   baseVersion: z.number().int().min(0).optional(),
   events: z.array(eventInput).min(1).max(100),
 });
 export type BatchInput = z.infer<typeof batchInput>;
+
+/** A device clock can be wrong. Keep the time only if it is within two days before and ten minutes after the server's clock. */
+export function plausibleTime(iso: string | undefined, now = Date.now()): Date | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) && t > now - 48 * 3_600_000 && t < now + 10 * 60_000 ? new Date(t) : null;
+}
 
 const tx = <T>(db: Db, fn: (t: Db) => Promise<T>) =>
   (db as unknown as { transaction: (f: (t: unknown) => Promise<T>) => Promise<T> }).transaction((t) => fn(t as Db));
@@ -33,7 +41,7 @@ const toScored = (r: Row): ScoredEvent => ({
 });
 const publicEvent = (r: Row) => ({
   id: r.id, serverSeq: r.serverSeq, localSeq: r.localSeq, type: r.type, side: r.side, period: r.period,
-  clockSeconds: r.clockSeconds, correctsEventId: r.correctsEventId, playerId: r.playerId, createdAt: r.createdAt,
+  clockSeconds: r.clockSeconds, correctsEventId: r.correctsEventId, playerId: r.playerId, occurredAt: r.occurredAt, createdAt: r.createdAt,
 });
 
 export class ConflictError extends AuthError {
@@ -105,7 +113,7 @@ export async function submitEvents(db: Db, bus: MatchBus, matchId: string, userI
       }
       const row = {
         id: e.id, matchId, serverSeq: ++seq, localSeq: e.localSeq, type: e.type, side: e.side ?? null, period: e.period,
-        clockSeconds: e.clockSeconds ?? null, correctsEventId: e.correctsEventId ?? null, playerId: e.playerId ?? null, createdBy: userId,
+        clockSeconds: e.clockSeconds ?? null, correctsEventId: e.correctsEventId ?? null, playerId: e.playerId ?? null, occurredAt: plausibleTime(e.occurredAt), createdBy: userId,
       };
       toInsert.push(row);
       live.set(row.id, { ...row, createdAt: new Date() } as Row);

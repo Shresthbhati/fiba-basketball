@@ -10,6 +10,7 @@ import {
   TEAM_ROLES, addMember, createClip, createGame, deleteClip, findGame, listClips, listGames, listMembers, markVideoReady,
   myTeams, readGame, removeMember,
 } from "./service.js";
+import { linkMatch, matchesOfTeam, setSync, timeline, unlinkMatch } from "./sync.js";
 
 const VIDEO_TYPES = { "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" } as const;
 type VideoType = keyof typeof VIDEO_TYPES;
@@ -107,6 +108,24 @@ export function registerFilm(app: FastifyInstance, db: Db, storage: MediaStorage
     return reply.status(206).header("content-range", `bytes ${start}-${end}/${total}`).header("content-length", end - start + 1)
       .send(storage.read(g.videoKey, { start, end }));
   });
+
+  // Line the film up with the official scorebook.
+  app.get("/api/v1/teams/:id/matches", { config: { access: view } }, async (req) => ({ items: await matchesOfTeam(db, idParam.parse(req.params).id) }));
+  app.put("/api/v1/film/games/:id/match", { config: { access: manageGame } }, async (req, reply) => {
+    const { matchId } = z.object({ matchId: z.uuid() }).parse(req.body);
+    await linkMatch(db, idParam.parse(req.params).id, matchId);
+    return reply.status(204).send();
+  });
+  app.delete("/api/v1/film/games/:id/match", { config: { access: manageGame } }, async (req, reply) => {
+    await unlinkMatch(db, idParam.parse(req.params).id);
+    return reply.status(204).send();
+  });
+  app.put("/api/v1/film/games/:id/sync", { config: { access: manageGame } }, async (req, reply) => {
+    const body = z.object({ eventId: z.uuid(), videoMs: z.number().int().min(0) }).parse(req.body);
+    await setSync(db, idParam.parse(req.params).id, body.eventId, body.videoMs);
+    return reply.status(204).send();
+  });
+  app.get("/api/v1/film/games/:id/timeline", { config: { access: viewGame } }, async (req) => timeline(db, idParam.parse(req.params).id));
 
   app.get("/api/v1/film/games/:id/clips", { config: { access: viewGame } }, async (req) => {
     const { tag } = z.object({ tag: z.string().max(30).optional() }).parse(req.query);

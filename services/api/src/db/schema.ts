@@ -189,6 +189,8 @@ export const matchEvents = pgTable(
     correctsEventId: uuid("corrects_event_id"),
     // Optional: the rostered player this event is credited to (validated against the team's competition roster).
     playerId: uuid("player_id").references(() => users.id),
+    // When the scorer's device recorded the event (client clock). Used to line events up with game film; null if not sent or implausible.
+    occurredAt: timestamp("occurred_at", { withTimezone: true }),
     createdBy: uuid("created_by").notNull().references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -374,6 +376,10 @@ export const filmGames = pgTable(
     videoKey: text("video_key"),
     videoType: text("video_type"),
     videoBytes: integer("video_bytes"),
+    // Optional link to the official match, and one sync point: the video position (ms) at which match event `syncEventId` happened.
+    matchId: uuid("match_id").references(() => matches.id),
+    syncEventId: uuid("sync_event_id"),
+    syncVideoMs: integer("sync_video_ms"),
   },
   (t) => [index("film_games_team_idx").on(t.teamId)],
 );
