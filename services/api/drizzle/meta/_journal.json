@@ -162,6 +162,13 @@
       "when": 1792738000000,
       "tag": "0022_tactical_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792739000000,
+      "tag": "0023_athlete_passport",
+      "breakpoints": true
     }
   ]
 }

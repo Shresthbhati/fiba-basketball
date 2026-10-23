@@ -532,5 +532,45 @@ export const tacticalReports = pgTable(
   ],
 );
 
+/** Athlete Career Passport share grants (WP-8.1, Master Spec §11, ADR-0010). Field-level granular privacy grants. */
+export const athletePassportGrants = pgTable(
+  "athlete_passport_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    label: text("label"),
+    includeAverages: boolean("include_averages").notNull().default(true),
+    includeShootingSplits: boolean("include_shooting_splits").notNull().default(true),
+    includeMinutes: boolean("include_minutes").notNull().default(false),
+    includeGameLog: boolean("include_game_log").notNull().default(true),
+    includeBiometrics: boolean("include_biometrics").notNull().default(false),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("athlete_passport_grants_user_idx").on(t.userId),
+    uniqueIndex("athlete_passport_grants_token_idx").on(t.token),
+  ],
+);
+
+/** Verified athlete achievements with issuer provenance (WP-8.2, Master Spec §11). */
+export const verifiedAchievements = pgTable(
+  "verified_achievements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    competitionId: uuid("competition_id").references(() => competitions.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    category: text("category").notNull(), // AWARD | CHAMPIONSHIP | SELECTION
+    issuer: text("issuer").notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("verified_achievements_user_idx").on(t.userId)],
+);
+
+
 
 
