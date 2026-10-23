@@ -99,6 +99,13 @@
       "when": 1792726743843,
       "tag": "0013_notification_email",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792727621775,
+      "tag": "0014_competition_rosters",
+      "breakpoints": true
     }
   ]
 }

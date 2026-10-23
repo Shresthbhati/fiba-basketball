@@ -1,3 +1,4 @@
+import { getRoster, removeRosterSpot, setRosterSpot } from "./roster.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { can } from "../authz/service.js";
@@ -51,6 +52,24 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
     const body = z.object({ teamId: z.uuid(), seed: z.number().int().min(1).optional() }).parse(req.body);
     await registerTeam(db, compId(req), body.teamId, body.seed);
     return reply.status(201).send({ ok: true });
+  });
+
+  // Rosters: visible to the team's members and the competition's organizer only (the handlers answer 404 to everyone else).
+  const rosterParams = z.object({ id: z.uuid(), teamId: z.uuid(), userId: z.uuid().optional() });
+  app.get("/api/v1/competitions/:id/teams/:teamId/roster", { config: { access: "authenticated" } }, async (req) => {
+    const p = rosterParams.parse(req.params);
+    return getRoster(db, req.user!, p.id, p.teamId);
+  });
+  app.put("/api/v1/competitions/:id/teams/:teamId/roster/:userId", { config: { access: "authenticated" } }, async (req, reply) => {
+    const p = rosterParams.extend({ userId: z.uuid() }).parse(req.params);
+    const { jersey } = z.object({ jersey: z.number().int().min(0).max(99) }).parse(req.body);
+    await setRosterSpot(db, req.user!, p.id, p.teamId, p.userId, jersey);
+    return reply.status(204).send();
+  });
+  app.delete("/api/v1/competitions/:id/teams/:teamId/roster/:userId", { config: { access: "authenticated" } }, async (req, reply) => {
+    const p = rosterParams.extend({ userId: z.uuid() }).parse(req.params);
+    await removeRosterSpot(db, req.user!, p.id, p.teamId, p.userId);
+    return reply.status(204).send();
   });
 
   app.post("/api/v1/competitions/:id/schedule", { config: { access: manage } }, async (req, reply) =>

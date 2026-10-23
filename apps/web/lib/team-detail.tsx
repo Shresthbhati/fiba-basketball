@@ -9,6 +9,7 @@ const msg = (e: unknown) => (e instanceof ApiError ? e.message : "Could not reac
 export function TeamDetail({ teamId }: { teamId: string }) {
   const [members, setMembers] = useState<Member[] | null>(null);
   const [canManage, setCanManage] = useState(false);
+  const [comps, setComps] = useState<{ id: string; name: string; status: string }[]>([]);
   const [games, setGames] = useState<FilmGame[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -22,6 +23,8 @@ export function TeamDetail({ teamId }: { teamId: string }) {
       const m = await api<{ items: Member[]; canManage: boolean }>(`/teams/${teamId}/members`);
       setMembers(m.items); setCanManage(m.canManage);
       setGames((await api<{ items: FilmGame[] }>(`/teams/${teamId}/games`)).items);
+      // Secondary information: if it fails the rest of the page still works.
+      setComps(await api<{ items: { id: string; name: string; status: string }[] }>(`/teams/${teamId}/competitions`).then((r) => r.items, () => []));
     } catch (e) {
       if (e instanceof ApiError && (e.status === 404 || e.status === 401)) setNotFound(true); else setError(msg(e));
     }
@@ -71,6 +74,14 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           </form>
         )}
       </section>
+      {comps.length > 0 && (
+        <section aria-label="Competitions">
+          <h2>Competitions</h2>
+          <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 6 }}>
+            {comps.map((c) => <li key={c.id}>{c.name} · <Link href={`/competitions/${c.id}/teams/${teamId}`}>Roster</Link></li>)}
+          </ul>
+        </section>
+      )}
       <section aria-label="Members">
         <h2>Members</h2>
         {!members && !error && <p>Loading…</p>}

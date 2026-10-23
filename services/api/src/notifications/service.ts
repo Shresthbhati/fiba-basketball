@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "../db/index.js";
 import { notifications } from "../db/schema.js";
 
-export type NewNotification = { kind: "GAME_CANCELLED" | "WAITLIST_PROMOTED" | "ADDED_TO_TEAM"; title: string; link?: string; data?: Record<string, string> };
+export type NewNotification = { kind: "GAME_CANCELLED" | "WAITLIST_PROMOTED" | "ADDED_TO_TEAM" | "ADDED_TO_ROSTER"; title: string; link?: string; data?: Record<string, string> };
 
 /** Writes one notification per user. Never throws into the caller: a failed notification must not undo the action that caused it. */
 export async function notify(db: Db, userIds: string[], n: NewNotification): Promise<void> {
