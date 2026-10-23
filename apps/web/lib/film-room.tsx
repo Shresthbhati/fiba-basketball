@@ -39,7 +39,7 @@ export function FilmRoom({ gameId }: { gameId: string }) {
   const matchKey = game ? `${game.matchId ?? ""}|${game.synced ? 1 : 0}` : null; // reload the timeline when the link or sync changes
   useEffect(() => { if (matchKey) void loadTimeline(); }, [matchKey, loadTimeline]);
   useEffect(() => {
-    if (game?.canManage && !game.matchId) api<{ items: TeamMatch[] }>(`/teams/${game.teamId}/matches`).then((r) => setMatches(r.items), () => setMatches([]));
+    if (game?.canManage && !game.matchId) api<{ items: TeamMatch[] }>(`/teams/${game.teamId}/matches`).then((r) => setMatches(r?.items ?? []), () => setMatches([]));
   }, [game?.canManage, game?.matchId, game?.teamId]);
   useEffect(() => { void loadClips(); }, [loadClips]);
 
