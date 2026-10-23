@@ -1,10 +1,10 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import type { Db } from "../db/index.js";
-import { consentGrants, guardianRelationships, users } from "../db/schema.js";
+import { competitionRosters, competitions, consentGrants, guardianRelationships, users } from "../db/schema.js";
 import { writeAudit } from "../audit/service.js";
 import { AuthError } from "../identity/service.js";
 
-export const CONSENT_KINDS = ["PUBLIC_PICKUP", "PROFILE_DISCOVERY", "MEDIA_USE"] as const;
+export const CONSENT_KINDS = ["PUBLIC_PICKUP", "PROFILE_DISCOVERY", "MEDIA_USE", "COMPETITION_PLAY"] as const;
 export type ConsentKind = (typeof CONSENT_KINDS)[number];
 
 const MAX_GUARDIANS = 4;
@@ -107,10 +107,18 @@ export async function revokeConsent(db: Db, actorId: string, subjectId: string, 
   await db.update(consentGrants).set({ revokedAt: new Date() })
     .where(and(eq(consentGrants.subjectId, subjectId), eq(consentGrants.kind, kind), isNull(consentGrants.revokedAt)));
   await writeAudit(db, { actorId, action: "consent.revoked", resourceType: "user", resourceId: subjectId, metadata: { kind } });
+  // Without consent to play, a minor cannot stay on the rosters of competitions that are still going. Finished competitions keep their history.
+  if (kind === "COMPETITION_PLAY" && subject?.isMinor) {
+    const open = (await db.select({ id: competitions.id }).from(competitions).where(ne(competitions.status, "COMPLETED"))).map((c) => c.id);
+    if (open.length > 0) {
+      const gone = await db.delete(competitionRosters).where(and(eq(competitionRosters.userId, subjectId), inArray(competitionRosters.competitionId, open))).returning({ c: competitionRosters.competitionId });
+      if (gone.length > 0) await writeAudit(db, { actorId, action: "roster.removed_consent_withdrawn", resourceType: "user", resourceId: subjectId, metadata: { competitions: gone.map((g) => g.c) } });
+    }
+  }
 }
 
 export async function consentsFor(db: Db, user: { id: string; isMinor: boolean }) {
-  const out: Record<ConsentKind, boolean> = { PUBLIC_PICKUP: false, PROFILE_DISCOVERY: false, MEDIA_USE: false };
+  const out: Record<ConsentKind, boolean> = { PUBLIC_PICKUP: false, PROFILE_DISCOVERY: false, MEDIA_USE: false, COMPETITION_PLAY: false };
   for (const k of CONSENT_KINDS) out[k] = await hasConsent(db, user, k);
   return out;
 }

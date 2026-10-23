@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { competitions, roleAssignments, users } from "../src/db/schema.js";
+import { auditLog, competitions, roleAssignments, users } from "../src/db/schema.js";
 import { testApp, user } from "./helpers.js";
 
 type T = Awaited<ReturnType<typeof testApp>>;
@@ -93,7 +93,7 @@ describe("competition rosters", () => {
     expect(res.json().title).toContain("at most 15");
   });
 
-  it("under-18 players cannot be rostered yet", async () => {
+  it("an under-18 player can be rostered only with a guardian's consent for competition play, and losing that consent removes them", async () => {
     const t = await testApp();
     const w = await world(t);
     const kid = await user(t, "kid@example.com", teen);
@@ -102,9 +102,45 @@ describe("competition rosters", () => {
     await call(t, parent, "POST", `/api/v1/guardians/${rel.json().id}/accept`);
     await call(t, parent, "PUT", "/api/v1/consents/MEDIA_USE", { subjectId: kid.id });
     expect((await call(t, w.coachA, "POST", `/api/v1/teams/${w.teamA}/members`, { email: "kid@example.com", role: "PLAYER" })).statusCode).toBe(201); // may join the team
-    const res = await call(t, w.coachA, "PUT", url(w.comp, w.teamA, kid.id), { jersey: 9 });
-    expect(res.statusCode).toBe(409);
-    expect(res.json().title).toContain("Under-18");
+    const put = () => call(t, w.coachA, "PUT", url(w.comp, w.teamA, kid.id), { jersey: 9 });
+    const candidates = async () => (await call(t, w.coachA, "GET", url(w.comp, w.teamA))).json().candidates.map((c: { userId: string }) => c.userId);
+
+    // Without consent: refused, and not even offered as a candidate. The teen cannot grant it themselves.
+    const refused = await put();
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().title).toContain("guardian consent for competition play");
+    expect(await candidates()).not.toContain(kid.id);
+    expect((await call(t, kid, "PUT", "/api/v1/consents/COMPETITION_PLAY")).statusCode).toBe(404);
+    expect((await call(t, w.coachA, "PUT", "/api/v1/consents/COMPETITION_PLAY", { subjectId: kid.id })).statusCode).toBe(404); // nor the coach
+
+    // The guardian allows it: now the teen is offered and can be rostered, and the guardian sees the consent.
+    expect((await call(t, parent, "PUT", "/api/v1/consents/COMPETITION_PLAY", { subjectId: kid.id })).statusCode).toBe(204);
+    expect(await candidates()).toContain(kid.id);
+    expect((await put()).statusCode).toBe(204);
+    expect((await call(t, w.coachA, "GET", url(w.comp, w.teamA))).json().items.map((x: { name: string }) => x.name)).toContain("Ada");
+
+    // The guardian withdraws consent: the teen comes off the roster of this unfinished competition and is audited.
+    expect((await call(t, parent, "DELETE", `/api/v1/consents/COMPETITION_PLAY?subjectId=${kid.id}`)).statusCode).toBe(204);
+    expect((await call(t, w.coachA, "GET", url(w.comp, w.teamA))).json().items).toEqual([]);
+    expect(await candidates()).not.toContain(kid.id);
+    expect((await put()).statusCode).toBe(409);
+    const audit = await t.db.select().from(auditLog);
+    expect(audit.some((a) => a.action === "roster.removed_consent_withdrawn" && a.resourceId === kid.id)).toBe(true);
+  });
+
+  it("withdrawing consent leaves finished competitions' rosters alone", async () => {
+    const t = await testApp();
+    const w = await world(t);
+    const kid = await user(t, "kid@example.com", teen);
+    const parent = await user(t, "parent@example.com");
+    const rel = await call(t, kid, "POST", "/api/v1/guardians", { guardianEmail: "parent@example.com" });
+    await call(t, parent, "POST", `/api/v1/guardians/${rel.json().id}/accept`);
+    for (const k of ["MEDIA_USE", "COMPETITION_PLAY"]) await call(t, parent, "PUT", `/api/v1/consents/${k}`, { subjectId: kid.id });
+    await call(t, w.coachA, "POST", `/api/v1/teams/${w.teamA}/members`, { email: "kid@example.com", role: "PLAYER" });
+    expect((await call(t, w.coachA, "PUT", url(w.comp, w.teamA, kid.id), { jersey: 9 })).statusCode).toBe(204);
+    await t.db.update(competitions).set({ status: "COMPLETED" }).where(eq(competitions.id, w.comp));
+    await call(t, parent, "DELETE", `/api/v1/consents/COMPETITION_PLAY?subjectId=${kid.id}`);
+    expect((await call(t, w.org, "GET", url(w.comp, w.teamA))).json().items.map((x: { jersey: number }) => x.jersey)).toEqual([9]);
   });
 
   it("team staff can edit only while registration is open; the organizer until the competition is over", async () => {
