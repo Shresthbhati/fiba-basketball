@@ -58,7 +58,7 @@ async function match(t: T) {
   const [m] = (await call(t, org, "POST", `/api/v1/competitions/${comp}/schedule`)).json().items as { id: string; homeTeamId: string; awayTeamId: string }[];
   // Home/away depends on the schedule; map "ours" accordingly.
   const homeIsA = m!.homeTeamId === teamA;
-  return { org, coachA, coachB, a1, b1, fan, matchId: m!.id, homeIsA, sideOf: (team: "A" | "B") => ((team === "A") === homeIsA ? "home" : "away") as "home" | "away" };
+  return { comp, teamA, org, coachA, coachB, a1, b1, fan, matchId: m!.id, homeIsA, sideOf: (team: "A" | "B") => ((team === "A") === homeIsA ? "home" : "away") as "home" | "away" };
 }
 let seq = 1;
 const send = (t: T, u: U, matchId: string, events: object[]) =>
@@ -128,5 +128,39 @@ describe("player attribution", () => {
     expect((await call(t, w.coachA, "GET", `/api/v1/matches/${w.matchId}/box-score`)).json()[B].players[0]).not.toHaveProperty("name"); // not their team
     expect((await call(t, w.org, "GET", `/api/v1/matches/${w.matchId}/box-score`)).json()[B].players[0].name).toBe("Bea One");
     expect((await call(t, w.a1, "GET", `/api/v1/matches/${w.matchId}/box-score`)).json()[A].players[0].name).toBe("Ann One");
+  });
+});
+
+describe("substitutions", () => {
+  it("records who comes on and who leaves, and refuses nonsense", async () => {
+    const t = await testApp();
+    const w = await match(t);
+    const A = w.sideOf("A"), B = w.sideOf("B");
+    const a2 = await user(t, "a2@example.com", { displayName: "Abe Two" });
+    const { teamA, comp } = w;
+    expect((await call(t, w.coachA, "POST", `/api/v1/teams/${teamA}/members`, { email: "a2@example.com", role: "PLAYER" })).statusCode).toBeLessThan(300);
+    const put = await call(t, w.org, "PUT", `/api/v1/competitions/${comp}/teams/${teamA}/roster/${a2.id}`, { jersey: 9 });
+    expect(put.statusCode, put.body).toBeLessThan(300);
+
+    // A starter is declared with no player leaving; a substitution names both.
+    const ok = await send(t, w.org, w.matchId, [
+      { type: "SUBSTITUTION", side: A, playerId: w.a1.id, clockSeconds: 600 },
+      { type: "SUBSTITUTION", side: A, playerId: a2.id, playerOutId: w.a1.id, clockSeconds: 420 },
+    ]);
+    expect(ok.statusCode, ok.body).toBe(200);
+    const stored = (await call(t, w.org, "GET", `/api/v1/matches/${w.matchId}/events`)).json().items as { type: string; playerId: string; playerOutId: string | null }[];
+    expect(stored.map((e) => e.playerOutId)).toEqual([null, w.a1.id]);
+    // Subs never score.
+    expect((await call(t, w.org, "GET", `/api/v1/matches/${w.matchId}/state`)).json().homeScore).toBe(0);
+
+    const bad = (events: object[]) => send(t, w.org, w.matchId, events);
+    expect((await bad([{ type: "SUBSTITUTION", side: A, clockSeconds: 300 }])).statusCode).toBe(422); // nobody coming on
+    expect((await bad([{ type: "SUBSTITUTION", side: A, playerId: a2.id, playerOutId: a2.id }])).statusCode).toBe(422); // self
+    expect((await bad([{ type: "SUBSTITUTION", side: A, playerId: a2.id, playerOutId: w.b1.id }])).statusCode).toBe(422); // leaving player on the other team
+    expect((await bad([{ type: "SUBSTITUTION", side: B, playerId: w.b1.id, playerOutId: w.a1.id }])).statusCode).toBe(422);
+    expect((await bad([{ type: "FIELD_GOAL", side: A, playerId: a2.id, playerOutId: w.a1.id }])).statusCode).toBe(422); // only subs can name who leaves
+    // Bench-only players show in the box score with an empty line; the side total is unchanged.
+    const box = (await call(t, w.org, "GET", `/api/v1/matches/${w.matchId}/box-score`)).json();
+    expect(box[A].players.map((p: { points: number }) => p.points)).toEqual([0, 0]);
   });
 });

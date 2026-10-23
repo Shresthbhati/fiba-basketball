@@ -64,6 +64,31 @@ describe("ScorePanel", () => {
     expect(timer()).toBe("10:00");
   });
 
+  it("substitutions: starters go on court, a bench player replaces one, and undo restores the lineup", async () => {
+    const home = [1, 2, 3, 4, 5, 6].map((n) => ({ userId: `h${n}`, name: `Player ${n}`, jersey: n }));
+    const q = new ScoreQueue("ms", offline, store());
+    render(<ScorePanel queue={q} rosters={{ home, away: [] }} />);
+    const bring = (n: number) => screen.getByLabelText(`Bring on #${n} Player ${n}`);
+    for (const n of [1, 2, 3, 4, 5]) await act(async () => { fireEvent.click(bring(n)); });
+    expect(screen.getByText("On court (5/5)")).toBeTruthy();
+    expect(q.pending.filter((e) => e.type === "SUBSTITUTION").map((e) => [e.playerId, e.playerOutId])).toEqual(
+      [["h1", undefined], ["h2", undefined], ["h3", undefined], ["h4", undefined], ["h5", undefined]]);
+
+    // Court is full: the bench player waits for someone to leave; leaving buttons are only live while one is waiting.
+    expect((screen.getByLabelText("Take off #3 Player 3") as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { fireEvent.click(bring(6)); });
+    expect(screen.getByText(/Who does #6 replace/)).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByLabelText("Take off #3 Player 3")); });
+    const sub = q.pending.at(-1)!;
+    expect(sub).toMatchObject({ type: "SUBSTITUTION", side: "home", playerId: "h6", playerOutId: "h3", clockSeconds: 600 });
+    expect(screen.queryByLabelText("Take off #3 Player 3")).toBeNull(); // 3 is on the bench now
+    expect(screen.getByLabelText("Take off #6 Player 6")).toBeTruthy();
+
+    await act(async () => { fireEvent.click(screen.getByText("Undo last")); });
+    expect(screen.getByLabelText("Take off #3 Player 3")).toBeTruthy(); // lineup restored
+    expect(screen.queryByLabelText("Take off #6 Player 6")).toBeNull();
+  });
+
   it("shows the conflict dialog with both choices", async () => {
     const q = new ScoreQueue("m3", offline, store());
     q.conflict = { currentVersion: 2, state: { version: 2, homeScore: 4, awayScore: 2, period: 1 }, newerEvents: [] };

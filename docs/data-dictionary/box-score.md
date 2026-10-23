@@ -23,4 +23,12 @@ The web scorer has a countdown clock the scorer starts and stops by hand (period
 after a stoppage). Its remaining seconds are stamped on every event as `match_events.clock_seconds` (the column already existed). The clock
 lives on the scorer's device only (localStorage, per match) and stops itself at 0:00. Nothing reads `clock_seconds` for stats yet.
 
-Not built: minutes played / substitutions (next: substitution entry, then minutes from the clock stamps), plus-minus, shot locations, season or career totals, player pages, exporting stats.
+## Substitutions (step 2 of minutes played)
+`match_events.player_out_id` (migration 0018, nullable, references `users`). A `SUBSTITUTION` event must name the player coming on
+(`player_id`) and may name the player leaving (`player_out_id`); with no one leaving it declares a starter on court. Both must be on the
+roster of the event's side, they cannot be the same person, and no other event type may carry `player_out_id` (422 otherwise). Subs never
+change the score. A player who only came on from the bench appears in the box score with an empty line.
+The scorer's "On court (n/5)" panel per team: tap the starters, then tap a bench player and the player they replace. The on-court lineup is
+kept on the scorer's device (per match) and undo restores it. Two scorers do not share a lineup yet; the server only has the events.
+
+Not built: minutes played itself (next: compute it from the sub and clock stamps; assumes each period runs to 0:00 unless a PERIOD_END says otherwise), plus-minus, shot locations, season or career totals, player pages, exporting stats.

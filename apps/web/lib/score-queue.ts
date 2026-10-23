@@ -3,7 +3,8 @@ import { ApiError, NetworkError } from "./api";
 export type Side = "home" | "away";
 export type PendingEvent = {
   id: string; localSeq: number; type: string; side?: Side; period: number; clockSeconds?: number; correctsEventId?: string;
-  playerId?: string; // optional: the rostered player this event is credited to
+  playerId?: string; // optional: the rostered player this event is credited to (for a SUBSTITUTION: the player coming on)
+  playerOutId?: string; // SUBSTITUTION only: the player leaving the court (absent for a starter)
   occurredAt?: string; // when the tap happened on this device (lines the event up with game film)
 };
 export type ServerEvent = PendingEvent & { serverSeq: number };
@@ -61,12 +62,13 @@ export class ScoreQueue {
     return { home, away };
   }
 
-  add(type: string, opts: { side?: Side; period: number; clockSeconds?: number; correctsEventId?: string; playerId?: string }) {
+  add(type: string, opts: { side?: Side; period: number; clockSeconds?: number; correctsEventId?: string; playerId?: string; playerOutId?: string }) {
     const e: PendingEvent = { id: uuid(), localSeq: this.s.nextLocalSeq++, type, period: opts.period };
     if (opts.side) e.side = opts.side;
     if (opts.clockSeconds !== undefined) e.clockSeconds = opts.clockSeconds;
     if (opts.correctsEventId) e.correctsEventId = opts.correctsEventId;
     if (opts.playerId) e.playerId = opts.playerId;
+    if (opts.playerOutId) e.playerOutId = opts.playerOutId;
     e.occurredAt = new Date().toISOString();
     this.s.pending.push(e);
     this.emit();

@@ -127,6 +127,13 @@
       "when": 1792731003289,
       "tag": "0017_film_sync_points",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792734086809,
+      "tag": "0018_match_event_sub_out",
+      "breakpoints": true
     }
   ]
 }

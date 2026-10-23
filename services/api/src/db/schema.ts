@@ -189,6 +189,8 @@ export const matchEvents = pgTable(
     correctsEventId: uuid("corrects_event_id"),
     // Optional: the rostered player this event is credited to (validated against the team's competition roster).
     playerId: uuid("player_id").references(() => users.id),
+    // SUBSTITUTION only: the rostered player leaving the court (player_id is the one coming on). Null for a starter declared on court.
+    playerOutId: uuid("player_out_id").references(() => users.id),
     // When the scorer's device recorded the event (client clock). Used to line events up with game film; null if not sent or implausible.
     occurredAt: timestamp("occurred_at", { withTimezone: true }),
     createdBy: uuid("created_by").notNull().references(() => users.id),
