@@ -190,6 +190,13 @@
       "when": 1792742000000,
       "tag": "0026_assessment_sharing_and_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792743000000,
+      "tag": "0027_coach_assignments",
+      "breakpoints": true
     }
   ]
 }

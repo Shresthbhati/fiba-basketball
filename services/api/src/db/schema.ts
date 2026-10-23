@@ -717,11 +717,64 @@ export const assessmentCoachFeedback = pgTable(
   (t) => [
     index("assessment_coach_feedback_assessment_idx").on(t.assessmentId),
   ],
+);/** Coach assignments for film study, drills, workouts & movement tests (WP-4.4, Master Spec §9.3). */
+export const coachAssignments = pgTable(
+  "coach_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    coachId: uuid("coach_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    type: text("type").notNull(), // FILM_STUDY | DRILL_PRACTICE | WORKOUT_PRESCRIPTION | MOVEMENT_ASSESSMENT
+    priority: text("priority").notNull().default("NORMAL"), // LOW | NORMAL | HIGH | URGENT
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    resourceRef: jsonb("resource_ref").$type<{
+      type: "FILM_CLIP" | "SCOUTING_MONTAGE" | "TACTICAL_PLAY" | "PRACTICE_DRILL" | "ASSESSMENT" | "WORKOUT";
+      id: string;
+      title?: string | undefined;
+    }>(),
+    quizQuestions: jsonb("quiz_questions").$type<Array<{
+      id: string;
+      question: string;
+      options: string[];
+      correctOptionIndex: number;
+    }>>().notNull().default([]),
+    targetAthleteIds: jsonb("target_athlete_ids").$type<string[]>().notNull().default([]),
+    status: text("status").notNull().default("ACTIVE"), // ACTIVE | ARCHIVED
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("coach_assignments_team_idx").on(t.teamId),
+    index("coach_assignments_coach_idx").on(t.coachId),
+  ],
 );
 
-
-
-
+/** Athlete submissions and coach reviews for coach assignments (WP-4.4 / WP-4.5, Master Spec §9.3). */
+export const assignmentSubmissions = pgTable(
+  "assignment_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assignmentId: uuid("assignment_id").notNull().references(() => coachAssignments.id, { onDelete: "cascade" }),
+    athleteId: uuid("athlete_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("SUBMITTED"), // SUBMITTED | REVIEWED | REVISION_REQUESTED
+    answers: jsonb("answers").$type<{
+      selectedOptions?: Record<string, number> | undefined;
+      athleteNotes?: string | undefined;
+      resourceId?: string | undefined;
+    }>().notNull().default({}),
+    score: integer("score"),
+    coachNotes: text("coach_notes"),
+    reviewedBy: uuid("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("assignment_submissions_assignment_athlete_idx").on(t.assignmentId, t.athleteId),
+    index("assignment_submissions_athlete_idx").on(t.athleteId),
+  ],
+);
 
 
 
