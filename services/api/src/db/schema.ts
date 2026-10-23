@@ -191,6 +191,11 @@ export const matchEvents = pgTable(
     playerId: uuid("player_id").references(() => users.id),
     // SUBSTITUTION only: the rostered player leaving the court (player_id is the one coming on). Null for a starter declared on court.
     playerOutId: uuid("player_out_id").references(() => users.id),
+    // Shot coordinates (in meters relative to attacking half court) and spatial zone classification (WP-3.4)
+    coordX: doublePrecision("coord_x"),
+    coordY: doublePrecision("coord_y"),
+    shotZone: text("shot_zone"),
+    distanceMeters: doublePrecision("distance_meters"),
     // When the scorer's device recorded the event (client clock). Used to line events up with game film; null if not sent or implausible.
     occurredAt: timestamp("occurred_at", { withTimezone: true }),
     createdBy: uuid("created_by").notNull().references(() => users.id),
