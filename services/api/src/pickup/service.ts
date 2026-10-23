@@ -4,6 +4,7 @@ import { courts, pickupGames, pickupParticipants, users } from "../db/schema.js"
 import { MAX_RESULTS, boundingBox, haversineMeters, roundDistance } from "../geo/distance.js";
 import { AuthError } from "../identity/service.js";
 import { CHECK_IN_EARLY_MS, phaseOf, type StoredStatus } from "./phase.js";
+import { notify } from "../notifications/service.js";
 import { hiddenUserIds, isBlockedEitherWay } from "../trust/service.js";
 
 type Game = typeof pickupGames.$inferSelect;
@@ -21,7 +22,7 @@ async function confirmedCount(db: Db, gameId: string) {
 const summary = (g: Game, n: number, now: Date) => ({
   id: g.id, title: g.title, courtId: g.courtId, startsAt: g.startsAt, endsAt: g.endsAt, capacity: g.capacity,
   skillBand: g.skillBand, confirmedCount: n, spotsLeft: Math.max(0, g.capacity - n),
-  phase: phaseOf({ ...g, status: g.status as StoredStatus }, n, now), hostConfirmedAt: g.hostConfirmedAt,
+  phase: phaseOf({ ...g, status: g.status as StoredStatus }, n, now), hostConfirmedAt: g.hostConfirmedAt, seriesId: g.seriesId,
 });
 
 export type NewGame = { courtId: string; title: string; startsAt: Date; endsAt: Date; capacity: number; skillBand?: string | undefined };
@@ -122,7 +123,8 @@ export async function rsvp(db: Db, gameId: string, userId: string, now = new Dat
 }
 
 export async function cancelRsvp(db: Db, gameId: string, userId: string) {
-  return tx(db, async (t) => {
+  let promoted: { userId: string; game: Game } | null = null;
+  const result = await tx(db, async (t) => {
     const [g] = await t.select().from(pickupGames).where(eq(pickupGames.id, gameId)).for("update");
     if (!g) throw new AuthError(404, "Not Found");
     if (g.hostId === userId) throw new AuthError(409, "Hosts must cancel the game instead");
@@ -138,10 +140,15 @@ export async function cancelRsvp(db: Db, gameId: string, userId: string) {
       if (next) {
         await t.update(pickupParticipants).set({ status: "CONFIRMED" })
           .where(and(eq(pickupParticipants.gameId, gameId), eq(pickupParticipants.userId, next.userId)));
+        promoted = { userId: next.userId, game: g };
       }
     }
     return { status: "CANCELLED" as const };
   });
+  // After the transaction commits, so a notification problem can never undo the promotion.
+  const p = promoted as { userId: string; game: Game } | null;
+  if (p) await notify(db, [p.userId], { kind: "WAITLIST_PROMOTED", title: `You're in: a spot opened up in "${p.game.title}"`, link: `/pickup/${p.game.id}`, data: { startsAt: p.game.startsAt.toISOString() } });
+  return result;
 }
 
 export async function checkIn(db: Db, gameId: string, userId: string, now = new Date()) {
@@ -169,6 +176,16 @@ export async function cancelGame(db: Db, gameId: string, hostId: string) {
   const g = await hostOnly(db, gameId, hostId);
   if (g.status === "COMPLETED") throw new AuthError(409, "Game already completed");
   await db.update(pickupGames).set({ status: "CANCELLED" }).where(eq(pickupGames.id, gameId));
+  await notifyGameCancelled(db, g);
+}
+
+/** Tells everyone who was in (or waiting for) a game that it is cancelled. The host already knows, so is left out. */
+export async function notifyGameCancelled(db: Db, g: { id: string; title: string; hostId: string; startsAt: Date }) {
+  const people = await db.select({ userId: pickupParticipants.userId }).from(pickupParticipants)
+    .where(and(eq(pickupParticipants.gameId, g.id), ne(pickupParticipants.status, "CANCELLED")));
+  await notify(db, people.map((p) => p.userId).filter((id) => id !== g.hostId), {
+    kind: "GAME_CANCELLED", title: `Cancelled: "${g.title}"`, link: `/pickup/${g.id}`, data: { startsAt: g.startsAt.toISOString() },
+  });
 }
 
 /** Only an explicit host confirmation completes a game — never the clock. */

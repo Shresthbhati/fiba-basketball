@@ -4,6 +4,7 @@ import type { Db } from "../db/index.js";
 import { MAX_RADIUS_M } from "../geo/distance.js";
 import { hasConsent } from "../consent/service.js";
 import { AuthError } from "../identity/service.js";
+import { cancelSeries, createSeries, mySeries } from "./series.js";
 import { cancelGame, cancelRsvp, checkIn, confirmComplete, createGame, getGame, rsvp, searchGames } from "./service.js";
 
 const idParam = z.object({ id: z.uuid() });
@@ -36,6 +37,20 @@ export function registerPickup(app: FastifyInstance, db: Db) {
     const q = searchQuery.parse(req.query);
     return { items: await searchGames(db, { lat: q.lat, lng: q.lng, radiusM: q.radius_m, from: q.from, to: q.to }) };
   });
+
+  const newSeries = z.object({
+    courtId: z.uuid(), title: z.string().trim().min(1).max(100), weekday: z.number().int().min(0).max(6),
+    startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour HH:MM"), durationMin: z.number().int().min(30).max(360),
+    timezone: z.string().min(1).max(64), capacity: z.number().int().min(2).max(30),
+    skillBand: z.enum(["CASUAL", "INTERMEDIATE", "COMPETITIVE"]).optional(),
+  });
+  app.post("/api/v1/pickup/series", { config: { access: { action: "pickup:host" } } }, async (req, reply) => {
+    await adultsOnly(req);
+    return reply.status(201).send(await createSeries(db, req.user!.id, newSeries.parse(req.body)));
+  });
+  app.get("/api/v1/pickup/series/mine", { config: { access: "authenticated" } }, async (req) => ({ items: await mySeries(db, req.user!.id) }));
+  app.post("/api/v1/pickup/series/:id/cancel", { config: { access: "authenticated" } }, async (req) =>
+    cancelSeries(db, idParam.parse(req.params).id, req.user!.id));
 
   app.get("/api/v1/pickup/:id", { config: { access: "public" } }, async (req) => getGame(db, gameId(req), req.user?.id ?? null));
 

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import cookie from "@fastify/cookie";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -17,8 +19,11 @@ import { ConsoleMailer, type Mailer } from "./identity/mailer.js";
 import { registerIdentity } from "./identity/routes.js";
 import { registerConsent } from "./consent/routes.js";
 import { registerTrust } from "./trust/routes.js";
+import { registerNotifications } from "./notifications/routes.js";
+import { registerFilm } from "./film/routes.js";
+import { LocalDiskStorage, type MediaStorage } from "./media/storage.js";
 
-export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[]; mailer?: Mailer; webBaseUrl?: string; rateLimitScale?: number; requireVerifiedGuardianEmail?: boolean; logger?: boolean; logStream?: { write(msg: string): void } } = {}): Promise<FastifyInstance> {
+export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[]; mailer?: Mailer; webBaseUrl?: string; rateLimitScale?: number; requireVerifiedGuardianEmail?: boolean; storage?: MediaStorage; maxVideoBytes?: number; logger?: boolean; logStream?: { write(msg: string): void } } = {}): Promise<FastifyInstance> {
   // Structured JSON logs with the request id. Cookies and credentials are redacted and request bodies are never logged.
   const logger = opts.logger || opts.logStream
     ? { level: "info", redact: { paths: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'], censor: "[redacted]" }, ...(opts.logStream ? { stream: opts.logStream } : {}) }
@@ -62,7 +67,9 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerCourts(app, db);
   registerPickup(app, db);
   registerCompetitions(app, db);
+  registerNotifications(app, db);
   registerTraining(app, db);
+  registerFilm(app, db, opts.storage ?? new LocalDiskStorage(join(tmpdir(), "courtiq-media")), opts.maxVideoBytes ?? 1024 ** 3);
   registerMatchScoring(app, db, new MatchBus());
 
   // Liveness: the process is up. Readiness: it can reach the database (use this for load balancer checks).

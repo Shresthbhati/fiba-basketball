@@ -11,6 +11,8 @@ const schema = z.object({
   MAIL_OUTBOX_DIR: z.string().optional(),
   SMTP_URL: z.string().optional(),
   MAIL_FROM: z.string().optional(),
+  MEDIA_DIR: z.string().optional(),
+  MAX_VIDEO_MB: z.coerce.number().int().min(1).max(20480).default(1024),
 });
 
 export type Config = z.infer<typeof schema>;
@@ -31,6 +33,7 @@ export function productionProblems(cfg: Config): string[] {
   if (!cfg.WEB_BASE_URL?.trim()) problems.push("WEB_BASE_URL is required so emailed links point at the web app");
   if (!cfg.SMTP_URL?.trim()) problems.push("SMTP_URL is required, otherwise password-reset and verification emails are never delivered");
   else if (!cfg.MAIL_FROM?.trim()) problems.push("MAIL_FROM is required when SMTP_URL is set");
+  if (!cfg.MEDIA_DIR?.trim()) problems.push("MEDIA_DIR is required (a persistent volume path), otherwise uploaded game film is lost on restart");
   if (cfg.MAIL_OUTBOX_DIR) problems.push("MAIL_OUTBOX_DIR is a development setting and must not be set in production");
   if (cfg.RATE_LIMIT_SCALE !== 1) problems.push("RATE_LIMIT_SCALE must be 1 in production (it loosens sign-in abuse limits)");
   return problems;

@@ -66,6 +66,22 @@ export const courtReports = pgTable("court_reports", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** A weekly repeating pickup game. Occurrences are real `pickup_games` rows created ahead of time (see pickup/series.ts). */
+export const pickupSeries = pgTable("pickup_series", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  hostId: uuid("host_id").notNull().references(() => users.id),
+  courtId: uuid("court_id").notNull().references(() => courts.id),
+  title: text("title").notNull(),
+  weekday: integer("weekday").notNull(), // 0 = Sunday .. 6 = Saturday, in `timezone`
+  startTime: text("start_time").notNull(), // local wall clock "HH:MM"
+  durationMin: integer("duration_min").notNull(),
+  timezone: text("timezone").notNull(), // IANA name, e.g. "America/New_York"
+  capacity: integer("capacity").notNull(),
+  skillBand: text("skill_band"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const pickupGames = pgTable(
   "pickup_games",
   {
@@ -80,8 +96,9 @@ export const pickupGames = pgTable(
     status: text("status").notNull().default("OPEN"), // OPEN | CANCELLED | COMPLETED
     hostConfirmedAt: timestamp("host_confirmed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    seriesId: uuid("series_id").references(() => pickupSeries.id),
   },
-  (t) => [index("pickup_starts_idx").on(t.startsAt)],
+  (t) => [index("pickup_starts_idx").on(t.startsAt), uniqueIndex("pickup_series_occurrence_idx").on(t.seriesId, t.startsAt)],
 );
 
 export const pickupParticipants = pgTable(
@@ -335,4 +352,55 @@ export const reports = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("reports_one_per_case_idx").on(t.caseId, t.reporterId)],
+);
+
+/** A game's film belongs to one team. Visible only to that team's members (see authz `team:view`). */
+export const filmGames = pgTable(
+  "film_games",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id),
+    title: text("title").notNull(),
+    opponent: text("opponent"),
+    playedOn: date("played_on", { mode: "string" }),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Video is stored outside the database (storage key only). NONE -> READY once the bytes are fully received.
+    videoStatus: text("video_status").notNull().default("NONE"),
+    videoKey: text("video_key"),
+    videoType: text("video_type"),
+    videoBytes: integer("video_bytes"),
+  },
+  (t) => [index("film_games_team_idx").on(t.teamId)],
+);
+
+export const filmClips = pgTable(
+  "film_clips",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gameId: uuid("game_id").notNull().references(() => filmGames.id, { onDelete: "cascade" }),
+    startMs: integer("start_ms").notNull(),
+    endMs: integer("end_ms").notNull(),
+    tags: text("tags").array().notNull().default([]),
+    note: text("note"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("film_clips_game_idx").on(t.gameId)],
+);
+
+/** In-app notifications. Private to `user_id`; they never name or reveal other users. */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // GAME_CANCELLED | WAITLIST_PROMOTED | ADDED_TO_TEAM
+    title: text("title").notNull(),
+    link: text("link"), // in-app path, e.g. /pickup/<id>
+    data: jsonb("data").$type<Record<string, string>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.createdAt)],
 );

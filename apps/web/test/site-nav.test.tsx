@@ -21,4 +21,18 @@ describe("SiteNav", () => {
     expect(screen.getByText("Log out")).toBeTruthy();
     expect(screen.queryByText("Sign up")).toBeNull();
   });
+  it("shows an unread count on the notifications link, only when signed in", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+      url.endsWith("/notifications") ? Response.json({ items: [], unread: 3 })
+        : Response.json({ id: "u", email: "a@b.c", displayName: "Ada", isMinor: false, emailVerified: true })));
+    wrap();
+    expect(await screen.findByRole("link", { name: "Notifications, 3 unread" })).toBeTruthy();
+  });
+  it("makes no notifications request when signed out", async () => {
+    const f = vi.fn(async () => Response.json({ title: "Not signed in" }, { status: 401 }));
+    vi.stubGlobal("fetch", f);
+    wrap();
+    await screen.findByText("Log in");
+    expect((f.mock.calls as unknown as string[][]).some((c) => String(c[0]).includes("/notifications"))).toBe(false);
+  });
 });

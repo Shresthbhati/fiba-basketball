@@ -8,6 +8,7 @@
 | `ALLOWED_ORIGINS` | api | Required in production. Comma-separated origins of the web app. Browser writes from any other origin get 403 "Cross-origin request blocked". |
 | `WEB_BASE_URL` | api | Required in production. Used for links in emails. |
 | `SMTP_URL` / `MAIL_FROM` | api | Required in production. Without `SMTP_URL`, `MAIL_OUTBOX_DIR` writes JSON files, else mail is printed to the log (dev only). |
+| `MEDIA_DIR` | api | Required in production. Persistent directory for uploaded game film; back it up with the database. `MAX_VIDEO_MB` (default 1024) caps one upload. |
 | `PORT` | api | Default 3001. |
 | `NODE_ENV` | api | `production` enables the start-up checks and secure cookies. |
 | `RATE_LIMIT_SCALE` | api | Must be 1 in production (tests raise it). |

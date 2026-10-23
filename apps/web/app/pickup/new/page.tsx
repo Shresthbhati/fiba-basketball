@@ -3,6 +3,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { ApiError, api } from "../../../lib/api";
 import type { Game } from "../../../lib/game-types";
+import { seriesBody } from "../../../lib/series-form";
 
 function NewGame() {
   const router = useRouter();
@@ -19,6 +20,17 @@ function NewGame() {
     setBusy(true);
     setError(null);
     try {
+      if (f.get("weekly")) {
+        await api("/pickup/series", {
+          method: "POST",
+          body: seriesBody({
+            courtId: courtId!, title: String(f.get("title")), capacity: Number(f.get("capacity")),
+            skillBand: String(f.get("skillBand") ?? ""), startsAtLocal: String(f.get("startsAt")), endsAtLocal: String(f.get("endsAt")),
+          }, Intl.DateTimeFormat().resolvedOptions().timeZone),
+        });
+        router.push("/pickup");
+        return;
+      }
       const g = await api<Game>("/pickup", {
         method: "POST",
         body: {
@@ -48,6 +60,10 @@ function NewGame() {
       <label>Level (optional)
         <select name="skillBand" defaultValue=""><option value="">Any</option><option value="CASUAL">Casual</option><option value="INTERMEDIATE">Intermediate</option><option value="COMPETITIVE">Competitive</option></select>
       </label>
+      <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input name="weekly" type="checkbox" style={{ width: "auto" }} /> Repeat every week at this time
+      </label>
+      <small>Weekly games are created four weeks ahead. You can stop the series any time and games already played stay.</small>
       {error && <p role="alert" style={{ color: "#ff6b6b" }}>{error}</p>}
       <button type="submit" disabled={busy}>{busy ? "Creating…" : "Create game"}</button>
     </form>

@@ -17,6 +17,10 @@ FROM node:22-slim
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out /app
+# Uploaded game film. Mount a persistent volume here; a named volume inherits this ownership on first use.
+RUN mkdir -p /data/media && chown node:node /data/media
+ENV MEDIA_DIR=/data/media
+VOLUME /data/media
 USER node
 EXPOSE 3001
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \
