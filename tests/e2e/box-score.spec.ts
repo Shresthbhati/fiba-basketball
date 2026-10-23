@@ -86,6 +86,16 @@ test("box score: score with players picked from rosters, then see the box score 
   expect(logged.items.find((e) => e.type === "THREE_POINT")?.clockSeconds).toBe(600);
   expect(logged.items.find((e) => e.type === "TIMEOUT")?.clockSeconds).toBe(450);
 
+  // Mark a starter on court; the server stores a SUBSTITUTION naming that player and nobody leaving.
+  await comets.getByText(/^On court/).click();
+  await comets.getByRole("button", { name: "Bring on #7 Pia Guard" }).click();
+  await expect(comets.getByText("On court (1/5)")).toBeVisible();
+  await expect(org.locator("main").getByRole("status").first()).toContainText("All changes saved");
+  const afterSub = (await (await org.request.get(`/api/v1/matches/${matchId}/events`)).json()) as { items: { type: string; playerId: string | null; playerOutId: string | null; clockSeconds: number | null }[] };
+  const sub = afterSub.items.find((e) => e.type === "SUBSTITUTION");
+  expect(sub).toMatchObject({ playerOutId: null, clockSeconds: 450 });
+  expect(sub?.playerId).toBeTruthy();
+
   // Before the game is official nobody has a record; the player's own page is empty.
   await pia.page.goto("/career");
   await expect(pia.page.getByText(/No official games yet/)).toBeVisible();

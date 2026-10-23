@@ -18,6 +18,7 @@ export const eventInput = z.object({
   clockSeconds: z.number().int().min(0).max(3600).optional(),
   correctsEventId: z.uuid().optional(),
   playerId: z.uuid().optional(),
+  playerOutId: z.uuid().optional(), // SUBSTITUTION only: who leaves (playerId is who comes on)
   occurredAt: z.iso.datetime({ offset: true }).optional(),
 });
 export const batchInput = z.object({
@@ -41,7 +42,7 @@ const toScored = (r: Row): ScoredEvent => ({
 });
 const publicEvent = (r: Row) => ({
   id: r.id, serverSeq: r.serverSeq, localSeq: r.localSeq, type: r.type, side: r.side, period: r.period,
-  clockSeconds: r.clockSeconds, correctsEventId: r.correctsEventId, playerId: r.playerId, occurredAt: r.occurredAt, createdAt: r.createdAt,
+  clockSeconds: r.clockSeconds, correctsEventId: r.correctsEventId, playerId: r.playerId, playerOutId: r.playerOutId, occurredAt: r.occurredAt, createdAt: r.createdAt,
 });
 
 export class ConflictError extends AuthError {
@@ -94,13 +95,19 @@ export async function submitEvents(db: Db, bus: MatchBus, matchId: string, userI
     const toInsert: (typeof matchEvents.$inferInsert)[] = [];
     for (const e of fresh) {
       if (NEEDS_SIDE.has(e.type) && !e.side) throw new AuthError(422, `${e.type} needs a side`);
+      if (e.playerOutId && (e.type !== "SUBSTITUTION" || !e.playerId)) throw new AuthError(422, "Only a SUBSTITUTION naming the player coming on can say who leaves");
+      if (e.type === "SUBSTITUTION" && !e.playerId) throw new AuthError(422, "A SUBSTITUTION must name the player coming on");
+      if (e.playerOutId && e.playerOutId === e.playerId) throw new AuthError(422, "A player cannot be substituted for themselves");
       if (e.playerId) {
         if (!PLAYER_EVENTS.has(e.type) || !e.side) throw new AuthError(422, `${e.type} cannot be credited to a player`);
         const teamId = e.side === "home" ? m.homeTeamId : m.awayTeamId;
-        const [onRoster] = await t.select({ userId: competitionRosters.userId }).from(competitionRosters).where(and(
-          eq(competitionRosters.competitionId, m.competitionId), eq(competitionRosters.teamId, teamId!), eq(competitionRosters.userId, e.playerId),
-        ));
-        if (!onRoster) throw new AuthError(422, "That player is not on the roster of the team the event is for");
+        for (const who of [e.playerId, e.playerOutId]) {
+          if (!who) continue;
+          const [onRoster] = await t.select({ userId: competitionRosters.userId }).from(competitionRosters).where(and(
+            eq(competitionRosters.competitionId, m.competitionId), eq(competitionRosters.teamId, teamId!), eq(competitionRosters.userId, who),
+          ));
+          if (!onRoster) throw new AuthError(422, "That player is not on the roster of the team the event is for");
+        }
       }
       if (e.type === "CORRECTION") {
         const target = e.correctsEventId ? live.get(e.correctsEventId) : undefined;
@@ -113,7 +120,7 @@ export async function submitEvents(db: Db, bus: MatchBus, matchId: string, userI
       }
       const row = {
         id: e.id, matchId, serverSeq: ++seq, localSeq: e.localSeq, type: e.type, side: e.side ?? null, period: e.period,
-        clockSeconds: e.clockSeconds ?? null, correctsEventId: e.correctsEventId ?? null, playerId: e.playerId ?? null, occurredAt: plausibleTime(e.occurredAt), createdBy: userId,
+        clockSeconds: e.clockSeconds ?? null, correctsEventId: e.correctsEventId ?? null, playerId: e.playerId ?? null, playerOutId: e.playerOutId ?? null, occurredAt: plausibleTime(e.occurredAt), createdBy: userId,
       };
       toInsert.push(row);
       live.set(row.id, { ...row, createdAt: new Date() } as Row);

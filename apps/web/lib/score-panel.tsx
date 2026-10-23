@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { ApiError, api } from "./api";
 import { GameClock, formatClock, parseClock } from "./game-clock";
+import { COURT_SIZE, Lineup } from "./lineup";
 import { ScoreQueue, type Side } from "./score-queue";
 
 const label: Record<string, string> = {
@@ -30,6 +31,10 @@ export function ScorePanel({ queue, onFinalize, info, rosters }: { queue: ScoreQ
   const clock = useMemo(() => new GameClock(`ciq.clock.${queue.id}`), [queue]);
   const [clockText, setClockText] = useState("");
   useEffect(() => clock.subscribe(rerender), [clock]);
+  // Who is on court per side, and the bench player the scorer has picked to come on (waiting for who leaves).
+  const lineup = useMemo(() => new Lineup(`ciq.lineup.${queue.id}`), [queue]);
+  const [comingOn, setComingOn] = useState<{ home: string | null; away: string | null }>({ home: null, away: null });
+  useEffect(() => lineup.subscribe(rerender), [lineup]);
   useEffect(() => {
     if (clock.period !== period) setPeriod(clock.period); // a reload restores the period the clock was on
     const t = setInterval(() => { clock.tick(); if (clock.running) rerender(); }, 250);
@@ -50,6 +55,23 @@ export function ScorePanel({ queue, onFinalize, info, rosters }: { queue: ScoreQ
     void queue.sync();
   };
   const { home, away } = queue.score;
+
+  const putOnCourt = (side: Side, playerId: string) => {
+    const wasWaiting = comingOn[side];
+    if (lineup.onCourt(side).length < COURT_SIZE && !wasWaiting) {
+      const e = queue.add("SUBSTITUTION", { side, period, clockSeconds: clock.seconds, playerId });
+      if (!lineup.addStarter({ eventId: e.id, side, inId: playerId })) queue.undoLast(period);
+    } else setComingOn((c) => ({ ...c, [side]: playerId }));
+    void queue.sync();
+  };
+  const swapOut = (side: Side, outId: string) => {
+    const inId = comingOn[side];
+    if (!inId) return;
+    const e = queue.add("SUBSTITUTION", { side, period, clockSeconds: clock.seconds, playerId: inId, playerOutId: outId });
+    if (!lineup.substitute({ eventId: e.id, side, inId, outId })) queue.undoLast(period);
+    setComingOn((c) => ({ ...c, [side]: null }));
+    void queue.sync();
+  };
 
   const team = (side: Side, name: string) => (
     <section aria-label={name} style={{ background: "var(--surface)", borderRadius: 12, padding: 12, display: "grid", gap: 8 }}>
@@ -80,6 +102,36 @@ export function ScorePanel({ queue, onFinalize, info, rosters }: { queue: ScoreQ
           ))}
         </div>
       )}
+      {(rosters?.[side].length ?? 0) > 0 && (() => {
+        const roster = rosters![side];
+        const on = lineup.onCourt(side);
+        const waiting = comingOn[side];
+        const tag = (p: RosterRow) => `#${p.jersey} ${p.name}`;
+        return (
+          <details>
+            <summary>On court ({on.length}/{COURT_SIZE})</summary>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <p style={{ margin: 0, color: "var(--muted)" }}>
+                {waiting ? `Who does #${roster.find((p) => p.userId === waiting)?.jersey} replace? Tap a player on court.`
+                  : on.length < COURT_SIZE ? "Tap the players who start. After that, tap a bench player to bring them on." : "Tap a bench player to bring them on."}
+              </p>
+              <div role="group" aria-label={`${name} on court`} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {roster.filter((p) => on.includes(p.userId)).map((p) => (
+                  <button key={p.userId} type="button" disabled={!waiting} onClick={() => swapOut(side, p.userId)} aria-label={`Take off ${tag(p)}`}>#{p.jersey}</button>
+                ))}
+                {on.length === 0 && <span style={{ color: "var(--muted)" }}>Nobody marked on court yet.</span>}
+              </div>
+              <div role="group" aria-label={`${name} bench`} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {roster.filter((p) => !on.includes(p.userId)).map((p) => (
+                  <button key={p.userId} type="button" className={waiting === p.userId ? "" : "secondary"} aria-pressed={waiting === p.userId}
+                    onClick={() => putOnCourt(side, p.userId)} aria-label={`Bring on ${tag(p)}`}>#{p.jersey}</button>
+                ))}
+              </div>
+              {waiting && <button type="button" className="secondary" onClick={() => setComingOn((c) => ({ ...c, [side]: null }))}>Cancel substitution</button>}
+            </div>
+          </details>
+        );
+      })()}
     </section>
   );
 
@@ -137,7 +189,7 @@ export function ScorePanel({ queue, onFinalize, info, rosters }: { queue: ScoreQ
       {team("away", awayName)}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button className="secondary" onClick={() => queue.undoLast(period) && void queue.sync()} disabled={queue.pendingCount === 0}>Undo last</button>
+        <button className="secondary" onClick={() => { const c = queue.undoLast(period); if (c?.correctsEventId) lineup.undo(c.correctsEventId); if (c) void queue.sync(); }} disabled={queue.pendingCount === 0}>Undo last</button>
         {onFinalize && (
           <button
             disabled={queue.pendingCount > 0 || queue.status === "conflict"}
