@@ -1,4 +1,4 @@
-import { boolean, date, doublePrecision, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, doublePrecision, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -780,6 +780,77 @@ export const assignmentSubmissions = pgTable(
     index("assignment_submissions_athlete_idx").on(t.athleteId),
   ],
 );
+
+/** Standardized athletic testing protocols (WP-6.2, Master Spec §5.4). */
+export const athleticTestProtocols = pgTable(
+  "athletic_test_protocols",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: varchar("slug", { length: 64 }).notNull().unique(),
+    name: varchar("name", { length: 120 }).notNull(),
+    category: varchar("category", { length: 32 }).notNull(), // JUMP | SPEED | AGILITY | CONDITIONING
+    description: text("description").notNull(),
+    primaryMetricUnit: varchar("primary_metric_unit", { length: 16 }).notNull(), // cm | seconds | level_shuttle
+    sortDirection: varchar("sort_direction", { length: 8 }).notNull().default("DESC"), // DESC | ASC
+    equipmentRequirements: text("equipment_requirements").notNull(),
+    warmupRecommendations: text("warmup_recommendations").notNull(),
+    standardAttempts: integer("standard_attempts").notNull().default(3),
+    isCombineCore: boolean("is_combine_core").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
+/** Athletic test sessions grouping combine tests on a given date (WP-6.2, Master Spec §5.4). */
+export const athleticTestSessions = pgTable(
+  "athletic_test_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    conductedByUserId: uuid("conducted_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "set null" }),
+    testDate: date("test_date", { mode: "string" }).notNull(),
+    location: varchar("location", { length: 120 }),
+    surface: varchar("surface", { length: 32 }).notNull().default("HARDWOOD"),
+    environmentalNotes: text("environmental_notes"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("athletic_test_sessions_user_idx").on(t.userId),
+    index("athletic_test_sessions_team_idx").on(t.teamId),
+    index("athletic_test_sessions_date_idx").on(t.testDate),
+  ],
+);
+
+/** Individual test attempts with instrument metadata and source provenance (WP-6.2, ADR-0008). */
+export const athleticTestAttempts = pgTable(
+  "athletic_test_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id").notNull().references(() => athleticTestSessions.id, { onDelete: "cascade" }),
+    protocolId: uuid("protocol_id").notNull().references(() => athleticTestProtocols.id, { onDelete: "cascade" }),
+    attemptNumber: integer("attempt_number").notNull(),
+    rawValue: doublePrecision("raw_value").notNull(),
+    isFault: boolean("is_fault").notNull().default(false),
+    faultReason: varchar("fault_reason", { length: 120 }),
+    instrumentType: varchar("instrument_type", { length: 32 }).notNull().default("VERTEC_VANES"),
+    instrumentDetails: jsonb("instrument_details").$type<{
+      model?: string | undefined;
+      serialNumber?: string | undefined;
+      beamHeightCm?: number | undefined;
+      calibrationDate?: string | undefined;
+    }>().notNull().default({}),
+    sourceType: varchar("source_type", { length: 32 }).notNull().default("SELF_REPORTED"),
+    confidence: doublePrecision("confidence").notNull().default(1.0),
+    notes: varchar("notes", { length: 255 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("athletic_test_attempts_session_idx").on(t.sessionId),
+    index("athletic_test_attempts_protocol_idx").on(t.protocolId),
+  ],
+);
+
 
 
 
