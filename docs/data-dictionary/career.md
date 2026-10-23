@@ -9,4 +9,5 @@
   credited event survives; corrected events are ignored, exactly as in the box score. Averages are per game counted.
 - Computed from the event log on request (nothing is stored), so a correction or reopened match changes the record immediately.
 
-Not built: sharing or public profiles, season filters, minutes, plus-minus, per-position stats, records for pickup games or training, export.
+Not built: sharing or public profiles, season filters, plus-minus, per-position stats, records for pickup games or training, export.
+Minutes: shown only for games where the scorer recorded a lineup for the player's team (see `box-score.md`).

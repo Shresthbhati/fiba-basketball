@@ -31,4 +31,16 @@ change the score. A player who only came on from the bench appears in the box sc
 The scorer's "On court (n/5)" panel per team: tap the starters, then tap a bench player and the player they replace. The on-court lineup is
 kept on the scorer's device (per match) and undo restores it. Two scorers do not share a lineup yet; the server only has the events.
 
-Not built: minutes played itself (next: compute it from the sub and clock stamps; assumes each period runs to 0:00 unless a PERIOD_END says otherwise), plus-minus, shot locations, season or career totals, player pages, exporting stats.
+## Minutes played (step 3)
+Computed on request from the event log (`match/minutes.ts`), never stored. Time on court = the countdown clock stamped on the substitutions:
+a starter is credited from the period's length, a substituted player from when they came on, to when they left or the period ended.
+- Period length = the clock on that period's `PERIOD_START`; if missing, the highest clock seen in that period; a period with neither is not counted.
+- The lineup carries into the next period. A period ends at its `PERIOD_END` clock, otherwise 0:00. A period that really ended early with no
+  `PERIOD_END` is over-counted: the scorer should tap period end for an early finish (the web scorer does not have that button yet).
+- A substitution with no clock applies at the last clock seen. Corrected events are ignored. Negative spans are clamped to 0.
+- A team with no substitution recorded has no minutes: `seconds` is `null` in the box score (the web hides the MIN column), never 0.
+  On a team that has a lineup, a player never put on court shows 0.
+- Career (`/me/career`): `minutes {games, total, perGame}` counts only games where the player's side had a lineup (`games` = those games),
+  so untracked games never dilute the average; each recent game carries `seconds` (null if untracked).
+
+Not built: plus-minus, per-minute stats, a scorer button for ending a period early, a shared (server-side) lineup between scorers, shot locations, exporting stats.

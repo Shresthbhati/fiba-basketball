@@ -43,6 +43,8 @@ describe("career (a player's own record)", () => {
       ev({ type: "FIELD_GOAL", side: one.A, playerId: a1.id }), ev({ type: "THREE_POINT", side: one.A, playerId: a1.id }),
       { ...ev({ type: "FREE_THROW", side: one.A, playerId: a1.id }), id: wrong }, ev({ type: "CORRECTION", correctsEventId: wrong }),
       ev({ type: "REBOUND", side: one.A, playerId: a1.id }), ev({ type: "FIELD_GOAL", side: one.B, playerId: b1.id }),
+      // A lineup for Ann's side only: she starts a 10:00 period and the period ends with 2:00 left => 8 minutes.
+      ev({ type: "PERIOD_START", clockSeconds: 600 }), ev({ type: "SUBSTITUTION", side: one.A, playerId: a1.id, clockSeconds: 600 }), ev({ type: "PERIOD_END", clockSeconds: 120 }),
     ] });
     // A match still in progress is not part of the record.
     expect((await call(t, a1, "GET", "/api/v1/me/career")).json().games).toBe(0);
@@ -54,7 +56,8 @@ describe("career (a player's own record)", () => {
     expect(after1.perGame).toEqual({ points: 5, rebounds: 1, assists: 0, turnovers: 0, fouls: 0 });
     expect(after1.competitions).toHaveLength(1);
     expect(after1.competitions[0]).toMatchObject({ name: "Cup One", games: 1 });
-    expect(after1.competitions[0].recent[0]).toMatchObject({ opponent: "Bravo", line: { points: 5 } });
+    expect(after1.competitions[0].recent[0]).toMatchObject({ opponent: "Bravo", line: { points: 5 }, seconds: 480 });
+    expect(after1.minutes).toEqual({ games: 1, total: 8, perGame: 8 });
 
     // A second competition: points add up and the averages are per game.
     const two = await competition(t, w, "Cup Two");
@@ -65,6 +68,10 @@ describe("career (a player's own record)", () => {
     expect(both.totals).toMatchObject({ points: 7, assists: 1, rebounds: 1 });
     expect(both.perGame).toEqual({ points: 3.5, rebounds: 0.5, assists: 0.5, turnovers: 0, fouls: 0 });
     expect(both.competitions.map((c: { name: string }) => c.name).sort()).toEqual(["Cup One", "Cup Two"]);
+    // Cup Two had no lineup, so it is left out of the minutes average rather than counted as 0.
+    expect(both.minutes).toEqual({ games: 1, total: 8, perGame: 8 });
+    expect(both.competitions.find((c: { name: string }) => c.name === "Cup Two").recent[0].seconds).toBeNull();
+    expect((await call(t, b1, "GET", "/api/v1/me/career")).json().minutes).toBeNull();
 
     // It is private: the other player only ever sees their own record, and someone never credited sees nothing.
     expect((await call(t, b1, "GET", "/api/v1/me/career")).json()).toMatchObject({ games: 1, totals: { points: 2 } });

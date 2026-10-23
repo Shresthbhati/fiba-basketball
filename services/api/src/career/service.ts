@@ -2,6 +2,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Db } from "../db/index.js";
 import { competitions, matchEvents, matches, teams } from "../db/schema.js";
 import { boxScore, type Line, type StatEvent } from "../match/box-score.js";
+import { hasLineup, secondsOnCourt, type MinuteEvent } from "../match/minutes.js";
 
 const blank = (): Line => ({ points: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, rebounds: 0, assists: 0, turnovers: 0, fouls: 0 });
 const addLine = (a: Line, b: Line) => { for (const k of Object.keys(a) as (keyof Line)[]) a[k] += b[k]; };
@@ -13,7 +14,7 @@ const addLine = (a: Line, b: Line) => { for (const k of Object.keys(a) as (keyof
 export async function myCareer(db: Db, userId: string) {
   const credited = await db.select({ matchId: matchEvents.matchId }).from(matchEvents).where(eq(matchEvents.playerId, userId));
   const matchIds = [...new Set(credited.map((c) => c.matchId))];
-  if (matchIds.length === 0) return { games: 0, totals: blank(), perGame: null, competitions: [] };
+  if (matchIds.length === 0) return { games: 0, totals: blank(), minutes: null, perGame: null, competitions: [] };
 
   const official = await db.select().from(matches).where(and(inArray(matches.id, matchIds), inArray(matches.state, ["FINISHED", "LOCKED"])));
   const compIds = [...new Set(official.map((m) => m.competitionId))];
@@ -21,26 +22,31 @@ export async function myCareer(db: Db, userId: string) {
   const teamIds = [...new Set(official.flatMap((m) => [m.homeTeamId, m.awayTeamId]).filter((x): x is string => !!x))];
   const teamNames = new Map(teamIds.length === 0 ? [] : (await db.select({ id: teams.id, name: teams.name }).from(teams).where(inArray(teams.id, teamIds))).map((t) => [t.id, t.name]));
 
-  const perComp = new Map<string, { name: string; games: number; totals: Line; recent: { matchId: string; opponent: string; scheduledAt: Date | null; line: Line }[] }>();
+  // Minutes are only counted from games where the scorer recorded a lineup for the player's side (timedGames), so an average is never diluted by untracked games.
+  const perComp = new Map<string, { name: string; games: number; timedGames: number; seconds: number; totals: Line; recent: { matchId: string; opponent: string; scheduledAt: Date | null; line: Line; seconds: number | null }[] }>();
   for (const m of official) {
     const events = await db.select().from(matchEvents).where(eq(matchEvents.matchId, m.id)).orderBy(asc(matchEvents.serverSeq));
     const stats = boxScore(events.map((e): StatEvent => ({ id: e.id, type: e.type as never, side: e.side as never, playerId: e.playerId, correctsEventId: e.correctsEventId })));
     const mine = stats.players.get(userId);
     if (!mine) continue; // every credited event was later corrected
     const opponentId = mine.side === "home" ? m.awayTeamId : m.homeTeamId;
-    const c = perComp.get(m.competitionId) ?? { name: compNames.get(m.competitionId) ?? "", games: 0, totals: blank(), recent: [] };
+    const c = perComp.get(m.competitionId) ?? { name: compNames.get(m.competitionId) ?? "", games: 0, timedGames: 0, seconds: 0, totals: blank(), recent: [] };
+    const timed = events.map((e): MinuteEvent => ({ id: e.id, type: e.type as never, side: e.side as never, period: e.period, clockSeconds: e.clockSeconds, playerId: e.playerId, playerOutId: e.playerOutId, correctsEventId: e.correctsEventId }));
+    const onCourt = hasLineup(timed, mine.side) ? secondsOnCourt(timed) : null;
+    const seconds = onCourt ? (onCourt.get(userId) ?? 0) : null;
     c.games++;
+    if (seconds !== null) { c.timedGames++; c.seconds += seconds; }
     addLine(c.totals, mine.line);
-    c.recent.push({ matchId: m.id, opponent: opponentId ? (teamNames.get(opponentId) ?? "") : "", scheduledAt: m.scheduledAt, line: mine.line });
+    c.recent.push({ matchId: m.id, opponent: opponentId ? (teamNames.get(opponentId) ?? "") : "", scheduledAt: m.scheduledAt, line: mine.line, seconds });
     perComp.set(m.competitionId, c);
   }
 
   const totals = blank();
-  let games = 0;
-  for (const c of perComp.values()) { games += c.games; addLine(totals, c.totals); }
+  let games = 0, timedGames = 0, seconds = 0;
+  for (const c of perComp.values()) { games += c.games; timedGames += c.timedGames; seconds += c.seconds; addLine(totals, c.totals); }
   const avg = (n: number) => Math.round((n / games) * 10) / 10;
   return {
-    games, totals,
+    games, totals, minutes: timedGames === 0 ? null : { games: timedGames, total: Math.round(seconds / 60), perGame: Math.round((seconds / 60 / timedGames) * 10) / 10 },
     perGame: games === 0 ? null : { points: avg(totals.points), rebounds: avg(totals.rebounds), assists: avg(totals.assists), turnovers: avg(totals.turnovers), fouls: avg(totals.fouls) },
     competitions: [...perComp.values()].map((c) => ({ ...c, recent: c.recent.slice(-10).reverse() })),
   };

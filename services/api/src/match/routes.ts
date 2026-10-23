@@ -10,6 +10,7 @@ import { ConflictError, batchInput, listEvents, matchState, submitEvents } from 
 import { and, asc, eq } from "drizzle-orm";
 import { competitionRosters } from "../db/schema.js";
 import { boxScore } from "./box-score.js";
+import { hasLineup, secondsOnCourt, type MinuteEvent } from "./minutes.js";
 import { matchEventsOf } from "./events.js";
 
 const id = z.object({ id: z.uuid() });
@@ -50,6 +51,8 @@ export function registerMatchScoring(app: FastifyInstance, db: Db, bus: MatchBus
     const m = await viewable(req);
     const events = await matchEventsOf(db, m.id);
     const stats = boxScore(events.map((e) => ({ id: e.id, type: e.type as never, side: e.side as never, playerId: e.playerId, correctsEventId: e.correctsEventId })));
+    const timed = events.map((e): MinuteEvent => ({ id: e.id, type: e.type as never, side: e.side as never, period: e.period, clockSeconds: e.clockSeconds, playerId: e.playerId, playerOutId: e.playerOutId, correctsEventId: e.correctsEventId }));
+    const onCourt = secondsOnCourt(timed);
     const out = {} as Record<"home" | "away", { players: unknown[]; unattributed: unknown; total: unknown }>;
     for (const side of ["home", "away"] as const) {
       const teamId = side === "home" ? m.homeTeamId : m.awayTeamId;
@@ -57,9 +60,11 @@ export function registerMatchScoring(app: FastifyInstance, db: Db, bus: MatchBus
         ? (await can(db, req.user.id, "team:view", { type: "team", id: teamId })) || (await can(db, req.user.id, "competition:manage", { type: "competition", id: m.competitionId }))
         : false;
       const roster = new Map((await rosterOf(m.competitionId, teamId)).map((r) => [r.userId, r]));
+      const timedSide = onCourt !== null && hasLineup(timed, side);
       const players = [...stats.players.entries()].filter(([, p]) => p.side === side).map(([userId, p]) => {
         const r = roster.get(userId);
-        return { jersey: r?.jersey ?? null, ...(seesNames && r ? { name: r.name } : {}), ...p.line };
+        // seconds is null when no lineup was recorded for this side (never a made-up 0).
+        return { jersey: r?.jersey ?? null, ...(seesNames && r ? { name: r.name } : {}), seconds: timedSide ? (onCourt!.get(userId) ?? 0) : null, ...p.line };
       }).sort((a, b) => (a.jersey ?? 999) - (b.jersey ?? 999));
       out[side] = { players, unattributed: stats.unattributed[side], total: stats.totals[side] };
     }
