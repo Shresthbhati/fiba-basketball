@@ -1,3 +1,4 @@
+import { myCareer } from "../career/service.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { permissionsFor } from "../authz/service.js";
@@ -99,6 +100,9 @@ export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCoo
   });
 
   app.get("/api/v1/me", { config: { access: "authenticated" } }, async (req) => req.user);
+
+  // A player's own record from official results. Private: there is no way to read someone else's.
+  app.get("/api/v1/me/career", { config: { access: "authenticated" } }, async (req) => myCareer(db, req.user!.id));
 
   app.get("/api/v1/me/permissions", { config: { access: "authenticated" } }, async (req) =>
     permissionsFor(db, req.user!.id),
