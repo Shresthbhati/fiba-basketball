@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ApiError, api } from "./api";
 
 type Line = { points: number; fgm: number; fga: number; tpm: number; tpa: number; ftm: number; fta: number; rebounds: number; assists: number; turnovers: number; fouls: number };
-type Player = Line & { jersey: number | null; name?: string };
+type Player = Line & { jersey: number | null; name?: string; seconds: number | null };
 type Side = { players: Player[]; unattributed: Line; total: Line };
 type Box = { home: Side; away: Side };
 
@@ -11,21 +11,25 @@ const cols: [string, (l: Line) => string][] = [
   ["PTS", (l) => String(l.points)], ["FG", (l) => `${l.fgm}/${l.fga}`], ["3P", (l) => `${l.tpm}/${l.tpa}`], ["FT", (l) => `${l.ftm}/${l.fta}`],
   ["REB", (l) => String(l.rebounds)], ["AST", (l) => String(l.assists)], ["TO", (l) => String(l.turnovers)], ["PF", (l) => String(l.fouls)],
 ];
+const mmss = (secs: number) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 const hasStats = (l: Line) => Object.values(l).some((n) => n > 0);
 
 function SideTable({ name, side }: { name: string; side: Side }) {
+  // Minutes only appear when the scorer recorded a lineup for this team; otherwise the column is left out rather than showing zeros.
+  const timed = side.players.some((p) => typeof p.seconds === "number");
+  const min = (v: string) => (timed ? <td>{v}</td> : null);
   return (
     <div style={{ overflowX: "auto" }}>
       <table aria-label={`${name} box score`}>
         <caption style={{ textAlign: "left" }}>{name}</caption>
-        <thead><tr><th scope="col">Player</th>{cols.map(([h]) => <th key={h} scope="col">{h}</th>)}</tr></thead>
+        <thead><tr><th scope="col">Player</th>{timed && <th scope="col">MIN</th>}{cols.map(([h]) => <th key={h} scope="col">{h}</th>)}</tr></thead>
         <tbody>
           {side.players.map((p, i) => (
-            <tr key={i}><th scope="row">{p.jersey === null ? "Former player" : `#${p.jersey}`}{p.name ? ` ${p.name}` : ""}</th>{cols.map(([h, f]) => <td key={h}>{f(p)}</td>)}</tr>
+            <tr key={i}><th scope="row">{p.jersey === null ? "Former player" : `#${p.jersey}`}{p.name ? ` ${p.name}` : ""}</th>{min(typeof p.seconds === "number" ? mmss(p.seconds) : "—")}{cols.map(([h, f]) => <td key={h}>{f(p)}</td>)}</tr>
           ))}
-          {hasStats(side.unattributed) && <tr><th scope="row">Not credited to a player</th>{cols.map(([h, f]) => <td key={h}>{f(side.unattributed)}</td>)}</tr>}
+          {hasStats(side.unattributed) && <tr><th scope="row">Not credited to a player</th>{min("")}{cols.map(([h, f]) => <td key={h}>{f(side.unattributed)}</td>)}</tr>}
         </tbody>
-        <tfoot><tr><th scope="row">Team</th>{cols.map(([h, f]) => <td key={h}>{f(side.total)}</td>)}</tr></tfoot>
+        <tfoot><tr><th scope="row">Team</th>{min("")}{cols.map(([h, f]) => <td key={h}>{f(side.total)}</td>)}</tr></tfoot>
       </table>
     </div>
   );

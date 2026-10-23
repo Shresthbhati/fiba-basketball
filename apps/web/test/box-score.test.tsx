@@ -34,6 +34,20 @@ describe("BoxScore", () => {
     expect(within(away).queryByRole("row", { name: /Not credited/ })).toBeNull();
   });
 
+  it("adds a MIN column only for a team whose lineup was recorded", async () => {
+    box.home.players[0] = { ...box.home.players[0]!, seconds: 485 } as never;
+    box.home.players[1] = { ...box.home.players[1]!, seconds: 0 } as never;
+    box.away.players[0] = { ...box.away.players[0]!, seconds: null } as never;
+    render(<BoxScore matchId="m1" homeName="Reds" awayName="Blues" />);
+    fireEvent.click(screen.getByText("Box score"));
+    const home = await screen.findByRole("table", { name: "Reds box score" });
+    expect(within(home).getByRole("columnheader", { name: "MIN" })).toBeTruthy();
+    const ann = within(home).getByRole("row", { name: /#7 Ann/ });
+    expect(within(ann).getAllByRole("cell").map((c) => c.textContent).slice(0, 2)).toEqual(["8:05", "5"]);
+    const away = screen.getByRole("table", { name: "Blues box score" });
+    expect(within(away).queryByRole("columnheader", { name: "MIN" })).toBeNull(); // no lineup recorded: no column, no zeros
+  });
+
   it("shows a message if the box score cannot be loaded", async () => {
     status = 404;
     render(<BoxScore matchId="m1" homeName="Reds" awayName="Blues" />);

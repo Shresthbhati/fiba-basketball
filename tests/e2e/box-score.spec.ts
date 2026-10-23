@@ -112,6 +112,10 @@ test("box score: score with players picked from rosters, then see the box score 
   await expect(cometsBox.getByRole("row", { name: /Not credited to a player/ })).toContainText("1");
   await expect(cometsBox.getByRole("row", { name: /^Team/ })).toContainText("6");
   await expect(matchRow.getByRole("table", { name: "Blazers box score" }).getByRole("row", { name: /#23 Sam Wing/ })).toBeVisible();
+  // Minutes: only the Comets had a lineup recorded (Pia came on at 7:30 and the period ran out), the Blazers get no MIN column.
+  await expect(cometsBox.getByRole("columnheader", { name: "MIN" })).toBeVisible();
+  await expect(cometsBox.getByRole("row", { name: /#7 Pia Guard/ })).toContainText("7:30");
+  await expect(matchRow.getByRole("table", { name: "Blazers box score" }).getByRole("columnheader", { name: "MIN" })).toHaveCount(0);
 
   await fan.goto(competitionUrl);
   const fanRow = fan.getByRole("listitem", { name: /Match/ });

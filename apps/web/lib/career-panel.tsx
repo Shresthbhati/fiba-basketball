@@ -5,8 +5,8 @@ import { ApiError, api } from "./api";
 
 type Line = { points: number; fgm: number; fga: number; tpm: number; tpa: number; ftm: number; fta: number; rebounds: number; assists: number; turnovers: number; fouls: number };
 type Career = {
-  games: number; totals: Line; perGame: { points: number; rebounds: number; assists: number; turnovers: number; fouls: number } | null;
-  competitions: { name: string; games: number; totals: Line; recent: { matchId: string; opponent: string; scheduledAt: string | null; line: Line }[] }[];
+  games: number; totals: Line; minutes: { games: number; total: number; perGame: number } | null; perGame: { points: number; rebounds: number; assists: number; turnovers: number; fouls: number } | null;
+  competitions: { name: string; games: number; totals: Line; recent: { matchId: string; opponent: string; scheduledAt: string | null; line: Line; seconds: number | null }[] }[];
 };
 const shooting = (l: Line) => `${l.fgm}/${l.fga} FG · ${l.tpm}/${l.tpa} 3P · ${l.ftm}/${l.fta} FT`;
 
@@ -38,6 +38,7 @@ export function CareerPanel() {
               <li>Points {career.totals.points} · {career.perGame!.points} per game</li>
               <li>Rebounds {career.totals.rebounds} · {career.perGame!.rebounds} per game</li>
               <li>Assists {career.totals.assists} · {career.perGame!.assists} per game</li>
+              {career.minutes && <li>Minutes {career.minutes.total} · {career.minutes.perGame} per game ({career.minutes.games} {career.minutes.games === 1 ? "game" : "games"} with a recorded lineup)</li>}
               <li>Turnovers {career.totals.turnovers} · Fouls {career.totals.fouls}</li>
               <li>{shooting(career.totals)}</li>
             </ul>
@@ -49,7 +50,7 @@ export function CareerPanel() {
               <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 4 }}>
                 {c.recent.map((r) => (
                   <li key={r.matchId} style={{ background: "var(--surface)", padding: 8, borderRadius: 8 }}>
-                    vs {r.opponent || "opponent"}{r.scheduledAt ? ` · ${new Date(r.scheduledAt).toLocaleDateString()}` : ""} — {r.line.points} pts, {r.line.rebounds} reb, {r.line.assists} ast
+                    vs {r.opponent || "opponent"}{r.scheduledAt ? ` · ${new Date(r.scheduledAt).toLocaleDateString()}` : ""} — {typeof r.seconds === "number" ? `${Math.round(r.seconds / 60)} min, ` : ""}{r.line.points} pts, {r.line.rebounds} reb, {r.line.assists} ast
                   </li>
                 ))}
               </ul>

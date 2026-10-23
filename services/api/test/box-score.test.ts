@@ -159,8 +159,13 @@ describe("substitutions", () => {
     expect((await bad([{ type: "SUBSTITUTION", side: A, playerId: a2.id, playerOutId: w.b1.id }])).statusCode).toBe(422); // leaving player on the other team
     expect((await bad([{ type: "SUBSTITUTION", side: B, playerId: w.b1.id, playerOutId: w.a1.id }])).statusCode).toBe(422);
     expect((await bad([{ type: "FIELD_GOAL", side: A, playerId: a2.id, playerOutId: w.a1.id }])).statusCode).toBe(422); // only subs can name who leaves
+    await bad([{ type: "REBOUND", side: B, playerId: w.b1.id }]);
     // Bench-only players show in the box score with an empty line; the side total is unchanged.
     const box = (await call(t, w.org, "GET", `/api/v1/matches/${w.matchId}/box-score`)).json();
     expect(box[A].players.map((p: { points: number }) => p.points)).toEqual([0, 0]);
+    // Minutes: no PERIOD_START, so the period length is the highest clock seen (10:00). Ann 10:00 -> 7:00, Abe 7:00 -> 0:00.
+    expect(box[A].players.map((p: { seconds: number | null }) => p.seconds)).toEqual([180, 420]);
+    // The other side never had a lineup recorded: unknown, not zero.
+    expect(box[B].players.map((p: { seconds: number | null }) => p.seconds)).toEqual([null]);
   });
 });
