@@ -12,3 +12,9 @@ export const NEEDS_SIDE: ReadonlySet<EventType> = new Set<EventType>([
   "PLAYER_FOUL", "TECHNICAL_FOUL", "TEAM_FOUL", "TIMEOUT", "REBOUND", "ASSIST", "TURNOVER", "FIELD_GOAL",
   "FIELD_GOAL_MISSED", "THREE_POINT", "THREE_POINT_MISSED", "FREE_THROW", "FREE_THROW_MISSED", "SUBSTITUTION",
 ]);
+
+/** Events that can be credited to one player. (Team fouls, timeouts, clock/period events and corrections cannot.) */
+export const PLAYER_EVENTS: ReadonlySet<EventType> = new Set<EventType>([
+  "PLAYER_FOUL", "TECHNICAL_FOUL", "REBOUND", "ASSIST", "TURNOVER", "FIELD_GOAL", "FIELD_GOAL_MISSED", "THREE_POINT",
+  "THREE_POINT_MISSED", "FREE_THROW", "FREE_THROW_MISSED",
+]);
