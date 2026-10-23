@@ -409,3 +409,20 @@ export const notifications = pgTable(
   },
   (t) => [index("notifications_user_idx").on(t.userId, t.createdAt)],
 );
+
+/** A team's players for one competition. A player is on at most one team per competition; jersey numbers are unique within a team. */
+export const competitionRosters = pgTable(
+  "competition_rosters",
+  {
+    competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    jersey: integer("jersey").notNull(),
+    addedBy: uuid("added_by").notNull().references(() => users.id),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.competitionId, t.userId] }),
+    uniqueIndex("competition_roster_jersey_idx").on(t.competitionId, t.teamId, t.jersey),
+  ],
+);

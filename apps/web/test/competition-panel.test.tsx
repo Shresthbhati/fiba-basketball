@@ -36,6 +36,7 @@ describe("CompetitionPanel", () => {
     fireEvent.change(screen.getByLabelText("Team name"), { target: { value: "Reds" } });
     fireEvent.click(screen.getByText("Add team"));
     expect(await screen.findByText("Reds")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Roster" }).getAttribute("href")).toBe("/competitions/c1/teams/t-new"); // organizers can reach each team's roster
     expect(calls.map((c) => c.key)).toEqual(expect.arrayContaining(["POST /teams", "POST /competitions/c1/teams"]));
     expect(calls.find((c) => c.key === "POST /teams")!.body).toEqual({ name: "Reds" });
     expect(calls.find((c) => c.key === "POST /competitions/c1/teams")!.body).toEqual({ teamId: "t-new", seed: 1 });

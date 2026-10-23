@@ -141,7 +141,7 @@ export function CompetitionPanel({ id }: { id: string }) {
 
       <section aria-label="Teams">
         <h2>Teams ({comp.teams.length})</h2>
-        {comp.teams.length === 0 ? <p>No teams yet.</p> : <ol>{comp.teams.map((t) => <li key={t.id}>{t.name}</li>)}</ol>}
+        {comp.teams.length === 0 ? <p>No teams yet.</p> : <ol>{comp.teams.map((t) => <li key={t.id}><span>{t.name}</span>{comp.canManage && <> · <Link href={`/competitions/${id}/teams/${t.id}`}>Roster</Link></>}</li>)}</ol>}
         {comp.canManage && comp.status === "DRAFT" && (
           <form onSubmit={addTeam} style={{ display: "flex", gap: 8 }}>
             <input name="team" placeholder="Team name" required maxLength={80} aria-label="Team name" style={{ flex: 1 }} />

@@ -13,6 +13,7 @@ beforeEach(() => {
     calls.push({ key, body: init?.body });
     if (key === "GET /teams/t1/members") return Response.json({ canManage, items: [{ userId: "u1", name: "Coach C", role: "COACH" }, { userId: "u2", name: "Pat", role: "PLAYER" }] });
     if (key === "GET /teams/t1/games") return Response.json({ items: [{ id: "g1", teamId: "t1", title: "vs Lions", opponent: "Lions", playedOn: null, video: { status: "NONE" } }] });
+    if (key === "GET /teams/t1/competitions") return Response.json({ items: [{ id: "c1", name: "Summer Cup", status: "PUBLISHED" }] });
     if (key === "POST /teams/t1/members") return addStatus === 201 ? Response.json({}, { status: 201 }) : Response.json({ title: "This player is under 18 and needs guardian consent for media use before joining a team" }, { status: 409 });
     return new Response(null, { status: 204 });
   }));
@@ -28,6 +29,14 @@ describe("TeamDetail", () => {
     expect(screen.queryByRole("form", { name: "Add a member" })).toBeNull();
     expect(screen.queryByRole("form", { name: "Add a game" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove Pat" })).toBeNull();
+  });
+
+  it("lists the team's competitions with a link to its roster", async () => {
+    canManage = false;
+    render(<TeamDetail teamId="t1" />);
+    const link = await screen.findByRole("link", { name: "Roster" });
+    expect(link.getAttribute("href")).toBe("/competitions/c1/teams/t1");
+    expect(screen.getByText(/Summer Cup/)).toBeTruthy();
   });
 
   it("a coach can add and remove members, never remove a coach, and sees the server's reason when adding fails", async () => {

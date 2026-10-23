@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/index.js";
 import { can } from "../authz/service.js";
+import { eq } from "drizzle-orm";
+import { competitionTeams, competitions } from "../db/schema.js";
 import { AuthError } from "../identity/service.js";
 import { TooLargeError, type MediaStorage } from "../media/storage.js";
 import {
@@ -45,6 +47,12 @@ export function registerFilm(app: FastifyInstance, db: Db, storage: MediaStorage
     await removeMember(db, req.user!.id, id, userId);
     return reply.status(204).send();
   });
+
+  app.get("/api/v1/teams/:id/competitions", { config: { access: view } }, async (req) => ({
+    items: (await db.select({ id: competitions.id, name: competitions.name, status: competitions.status })
+      .from(competitionTeams).innerJoin(competitions, eq(competitions.id, competitionTeams.competitionId))
+      .where(eq(competitionTeams.teamId, idParam.parse(req.params).id))),
+  }));
 
   app.get("/api/v1/teams/:id/games", { config: { access: view } }, async (req) => ({ items: await listGames(db, idParam.parse(req.params).id) }));
   app.post("/api/v1/teams/:id/games", { config: { access: addFilm } }, async (req, reply) => {
