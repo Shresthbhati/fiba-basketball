@@ -1,0 +1,71 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: courtiq, POSTGRES_PASSWORD: courtiq, POSTGRES_DB: courtiq }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U courtiq" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://courtiq:courtiq@localhost:5432/courtiq
+      MAIL_OUTBOX_DIR: /tmp/courtiq-outbox
+      RATE_LIMIT_SCALE: "100"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      # The film test generates a tiny real webm with ffmpeg (not preinstalled on the runner).
+      - run: sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: pnpm --filter @courtiq/web build
+      - name: Start API and web
+        run: |
+          (cd services/api && PORT=3001 ALLOWED_ORIGINS=http://localhost:3000 WEB_BASE_URL=http://localhost:3000 nohup pnpm exec tsx src/main.ts > ../../api.log 2>&1 &)
+          (cd apps/web && nohup pnpm exec next start -p 3000 > ../../web.log 2>&1 &)
+          for i in $(seq 1 60); do curl -sf localhost:3001/health && curl -sf -o /dev/null localhost:3000/login && exit 0; sleep 1; done
+          echo "servers did not start"; cat api.log web.log; exit 1
+      - run: pnpm e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: e2e-traces, path: test-results/ }
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with: { context: ., file: services/api/Dockerfile, push: false, tags: courtiq-api:ci, cache-from: type=gha, cache-to: "type=gha,mode=max" }
+      - name: Build web image
+        uses: docker/build-push-action@v6
+        with: { context: ., file: apps/web/Dockerfile, push: false, tags: courtiq-web:ci, build-args: "API_URL=http://api:3001", cache-from: type=gha, cache-to: "type=gha,mode=max" }
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }

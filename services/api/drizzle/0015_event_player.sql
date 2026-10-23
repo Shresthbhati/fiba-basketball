@@ -1,0 +1,2 @@
+ALTER TABLE "match_events" ADD COLUMN "player_id" uuid;--> statement-breakpoint
+ALTER TABLE "match_events" ADD CONSTRAINT "match_events_player_id_users_id_fk" FOREIGN KEY ("player_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
