@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, api } from "./api";
-import { fmtTime, type Clip, type FilmGame } from "./film-types";
+import { SCORING_TYPES, fmtTime, timelineLabel, type Clip, type FilmGame, type TeamMatch, type Timeline } from "./film-types";
 
 const msg = (e: unknown) => (e instanceof ApiError ? e.message : "Could not reach the server.");
 const TYPES = ["video/mp4", "video/webm", "video/quicktime"];
@@ -17,6 +17,10 @@ export function FilmRoom({ gameId }: { gameId: string }) {
   const [uploading, setUploading] = useState(false);
   const [markIn, setMarkIn] = useState<number | null>(null);
   const [markOut, setMarkOut] = useState<number | null>(null);
+  const [timeline, setTimeline] = useState<Timeline | null>(null);
+  const [matches, setMatches] = useState<TeamMatch[]>([]);
+  const [pickMatch, setPickMatch] = useState("");
+  const [pickEvent, setPickEvent] = useState("");
   const [tags, setTags] = useState("");
   const [note, setNote] = useState("");
 
@@ -28,7 +32,15 @@ export function FilmRoom({ gameId }: { gameId: string }) {
     try { setClips((await api<{ items: Clip[] }>(`/film/games/${gameId}/clips${filter ? `?tag=${encodeURIComponent(filter)}` : ""}`)).items); }
     catch (e) { if (!(e instanceof ApiError && e.status === 404)) setError(msg(e)); }
   }, [gameId, filter]);
+  const loadTimeline = useCallback(async () => {
+    try { setTimeline(await api<Timeline>(`/film/games/${gameId}/timeline`)); } catch { setTimeline(null); }
+  }, [gameId]);
   useEffect(() => { void loadGame(); }, [loadGame]);
+  const matchKey = game ? `${game.matchId ?? ""}|${game.synced ? 1 : 0}` : null; // reload the timeline when the link or sync changes
+  useEffect(() => { if (matchKey) void loadTimeline(); }, [matchKey, loadTimeline]);
+  useEffect(() => {
+    if (game?.canManage && !game.matchId) api<{ items: TeamMatch[] }>(`/teams/${game.teamId}/matches`).then((r) => setMatches(r.items), () => setMatches([]));
+  }, [game?.canManage, game?.matchId, game?.teamId]);
   useEffect(() => { void loadClips(); }, [loadClips]);
 
   async function upload(file: File) {
@@ -60,6 +72,26 @@ export function FilmRoom({ gameId }: { gameId: string }) {
   async function removeClip(id: string) {
     try { await api(`/film/games/${gameId}/clips/${id}`, { method: "DELETE" }); await loadClips(); } catch (e) { setError(msg(e)); }
   }
+  async function link(e: FormEvent) {
+    e.preventDefault(); setError(null);
+    try { await api(`/film/games/${gameId}/match`, { method: "PUT", body: { matchId: pickMatch } }); await loadGame(); await loadTimeline(); }
+    catch (err) { setError(msg(err)); }
+  }
+  async function unlink() {
+    setError(null);
+    try { await api(`/film/games/${gameId}/match`, { method: "DELETE" }); await loadGame(); setTimeline(null); } catch (err) { setError(msg(err)); }
+  }
+  async function syncNow(e: FormEvent) {
+    e.preventDefault(); setError(null);
+    try { await api(`/film/games/${gameId}/sync`, { method: "PUT", body: { eventId: pickEvent, videoMs: now() } }); await loadGame(); await loadTimeline(); }
+    catch (err) { setError(msg(err)); }
+  }
+  function jump(ms: number) {
+    const v = video.current;
+    if (!v) return;
+    v.currentTime = ms / 1000;
+    void v.play().catch(() => undefined);
+  }
   function play(c: Clip) {
     const v = video.current;
     if (!v) return;
@@ -89,6 +121,51 @@ export function FilmRoom({ gameId }: { gameId: string }) {
           {uploading && <span role="status"> Uploading… keep this page open.</span>}
         </label>
       )}
+
+      <section aria-label="Scorebook">
+        <h2>Scorebook</h2>
+        {!game.matchId && !canManage && <p>This film is not linked to an official match.</p>}
+        {!game.matchId && canManage && (
+          matches.length === 0 ? <p>No official match of this team to link yet.</p> : (
+            <form aria-label="Link a match" onSubmit={link} style={{ display: "grid", gap: 8 }}>
+              <label>Official match
+                <select value={pickMatch} onChange={(e) => setPickMatch(e.target.value)} required>
+                  <option value="">Choose…</option>
+                  {matches.map((m) => <option key={m.id} value={m.id}>{m.home} vs {m.away} · {m.competition}{m.homeScore !== null ? ` · ${m.homeScore}–${m.awayScore}` : ""}</option>)}
+                </select>
+              </label>
+              <button type="submit">Link film to match</button>
+            </form>
+          )
+        )}
+        {timeline?.linked && (
+          <>
+            {canManage && <p><button type="button" className="secondary" onClick={unlink}>Unlink match</button></p>}
+            {!timeline.synced && !canManage && <p>The coach has not lined this film up with the scorebook yet.</p>}
+            {!timeline.synced && canManage && (
+              <form aria-label="Line up the video" onSubmit={syncNow} style={{ display: "grid", gap: 8 }}>
+                <p>Pause the video at the moment one of these baskets was scored, choose it, then press the button.</p>
+                <label>Basket
+                  <select value={pickEvent} onChange={(e) => setPickEvent(e.target.value)} required>
+                    <option value="">Choose…</option>
+                    {timeline.items.filter((i) => SCORING_TYPES.has(i.type)).map((i) => <option key={i.id} value={i.id}>{timelineLabel(i, timeline.ours)}</option>)}
+                  </select>
+                </label>
+                <button type="submit" disabled={game.video.status !== "READY"}>Use the current video time for this basket</button>
+              </form>
+            )}
+            {timeline.untimed > 0 && <small>{timeline.untimed} scorebook event(s) have no recorded time and are not shown.</small>}
+            {timeline.synced && (
+              <ul aria-label="Scorebook timeline" style={{ listStyle: "none", padding: 0, display: "grid", gap: 4 }}>
+                {timeline.items.filter((i) => i.videoMs !== null).map((i) => (
+                  <li key={i.id}><button type="button" className="secondary" onClick={() => jump(i.videoMs!)}>{fmtTime(i.videoMs!)}</button> {timelineLabel(i, timeline.ours)}</li>
+                ))}
+              </ul>
+            )}
+            {canManage && timeline.synced && <small>Wrong spot? Unlink the match and link it again to redo the lineup.</small>}
+          </>
+        )}
+      </section>
 
       <section aria-label="Clips">
         <h2>Clips</h2>

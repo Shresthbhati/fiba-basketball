@@ -56,6 +56,7 @@ export type Game = typeof filmGames.$inferSelect;
 const gameView = (g: Game) => ({
   id: g.id, teamId: g.teamId, title: g.title, opponent: g.opponent, playedOn: g.playedOn,
   video: { status: g.videoStatus, type: g.videoType, bytes: g.videoBytes },
+  matchId: g.matchId, synced: g.syncVideoMs !== null,
 });
 
 export async function createGame(db: Db, userId: string, teamId: string, input: { title: string; opponent?: string | undefined; playedOn?: string | undefined }) {

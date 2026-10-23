@@ -4,6 +4,7 @@ export type Side = "home" | "away";
 export type PendingEvent = {
   id: string; localSeq: number; type: string; side?: Side; period: number; clockSeconds?: number; correctsEventId?: string;
   playerId?: string; // optional: the rostered player this event is credited to
+  occurredAt?: string; // when the tap happened on this device (lines the event up with game film)
 };
 export type ServerEvent = PendingEvent & { serverSeq: number };
 export type ServerState = { version: number; homeScore: number; awayScore: number; period: number };
@@ -65,6 +66,7 @@ export class ScoreQueue {
     if (opts.clockSeconds !== undefined) e.clockSeconds = opts.clockSeconds;
     if (opts.correctsEventId) e.correctsEventId = opts.correctsEventId;
     if (opts.playerId) e.playerId = opts.playerId;
+    e.occurredAt = new Date().toISOString();
     this.s.pending.push(e);
     this.emit();
     return e;
