@@ -1,9 +1,10 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, it } from "vitest";
 
-const dir = new URL("../drizzle", import.meta.url).pathname;
+const dir = fileURLToPath(new URL("../drizzle", import.meta.url));
 const files = readdirSync(dir).filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort();
 const run = async (db: PGlite, file: string) => {
   for (const stmt of readFileSync(join(dir, file), "utf8").split("--> statement-breakpoint")) if (stmt.trim()) await db.exec(stmt);

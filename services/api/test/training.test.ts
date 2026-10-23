@@ -23,14 +23,26 @@ async function workout(t: T, u: U, ex: string, sets: Record<string, unknown>[]) 
 }
 
 describe("exercise library", () => {
-  it("is public, seeded, and every exercise is flagged as not yet reviewed", async () => {
+  it("is public, seeded with 40 basketball movements, and every exercise is flagged as not yet reviewed", async () => {
     const t = await testApp();
     const all = (await t.app.inject({ url: "/api/v1/exercises" })).json().items;
-    expect(all.length).toBeGreaterThanOrEqual(12);
+    expect(all.length).toBe(40);
     expect(all.every((e: { reviewed: boolean }) => e.reviewed === false)).toBe(true);
-    const power = (await t.app.inject({ url: "/api/v1/exercises?category=POWER" })).json().items;
-    expect(power.length).toBeGreaterThan(0);
-    expect(power.every((e: { category: string }) => e.category === "POWER")).toBe(true);
+
+    // Verify key categories are populated
+    for (const cat of ["STRENGTH", "POWER", "PLYOMETRIC", "SPEED_AGILITY", "CORE", "CONDITIONING", "MOBILITY"]) {
+      const filtered = (await t.app.inject({ url: `/api/v1/exercises?category=${cat}` })).json().items;
+      expect(filtered.length).toBeGreaterThan(0);
+      expect(filtered.every((e: { category: string }) => e.category === cat)).toBe(true);
+    }
+
+    // Verify specific basketball movements exist
+    const slugs = new Set(all.map((e: { slug: string }) => e.slug));
+    expect(slugs.has("countermovement-jump")).toBe(true);
+    expect(slugs.has("skater-bounds")).toBe(true);
+    expect(slugs.has("lane-agility-drill")).toBe(true);
+    expect(slugs.has("trap-bar-deadlift")).toBe(true);
+
     expect((await t.app.inject({ url: "/api/v1/exercises?category=NOPE" })).statusCode).toBe(400);
   });
 });

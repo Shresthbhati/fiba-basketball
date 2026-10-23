@@ -7,6 +7,8 @@ import type { MatchBus } from "./bus.js";
 import { EventType, NEEDS_SIDE, PLAYER_EVENTS } from "./event-type.js";
 import { project, type ScoreState, type ScoredEvent } from "./projection.js";
 
+import { classifyShot } from "./shot-chart.js";
+
 type Row = typeof matchEvents.$inferSelect;
 
 export const eventInput = z.object({
@@ -19,6 +21,10 @@ export const eventInput = z.object({
   correctsEventId: z.uuid().optional(),
   playerId: z.uuid().optional(),
   playerOutId: z.uuid().optional(), // SUBSTITUTION only: who leaves (playerId is who comes on)
+  coordX: z.number().min(-15).max(30).optional(),
+  coordY: z.number().min(-15).max(30).optional(),
+  shotZone: z.string().optional(),
+  distanceMeters: z.number().optional(),
   occurredAt: z.iso.datetime({ offset: true }).optional(),
 });
 export const batchInput = z.object({
@@ -42,7 +48,9 @@ const toScored = (r: Row): ScoredEvent => ({
 });
 const publicEvent = (r: Row) => ({
   id: r.id, serverSeq: r.serverSeq, localSeq: r.localSeq, type: r.type, side: r.side, period: r.period,
-  clockSeconds: r.clockSeconds, correctsEventId: r.correctsEventId, playerId: r.playerId, playerOutId: r.playerOutId, occurredAt: r.occurredAt, createdAt: r.createdAt,
+  clockSeconds: r.clockSeconds, correctsEventId: r.correctsEventId, playerId: r.playerId, playerOutId: r.playerOutId,
+  coordX: r.coordX, coordY: r.coordY, shotZone: r.shotZone, distanceMeters: r.distanceMeters,
+  occurredAt: r.occurredAt, createdAt: r.createdAt,
 });
 
 export class ConflictError extends AuthError {
@@ -118,9 +126,18 @@ export async function submitEvents(db: Db, bus: MatchBus, matchId: string, userI
       } else if (e.correctsEventId) {
         throw new AuthError(422, "Only CORRECTION events can reference another event");
       }
+      let zone: string | null = e.shotZone ?? null;
+      let distanceMeters: number | null = e.distanceMeters ?? null;
+      if (e.coordX != null && e.coordY != null && (zone == null || distanceMeters == null)) {
+        const classified = classifyShot(e.type, e.coordX, e.coordY);
+        zone = classified.zone;
+        distanceMeters = classified.distanceMeters;
+      }
       const row = {
         id: e.id, matchId, serverSeq: ++seq, localSeq: e.localSeq, type: e.type, side: e.side ?? null, period: e.period,
-        clockSeconds: e.clockSeconds ?? null, correctsEventId: e.correctsEventId ?? null, playerId: e.playerId ?? null, playerOutId: e.playerOutId ?? null, occurredAt: plausibleTime(e.occurredAt), createdBy: userId,
+        clockSeconds: e.clockSeconds ?? null, correctsEventId: e.correctsEventId ?? null, playerId: e.playerId ?? null, playerOutId: e.playerOutId ?? null,
+        coordX: e.coordX ?? null, coordY: e.coordY ?? null, shotZone: zone, distanceMeters,
+        occurredAt: plausibleTime(e.occurredAt), createdBy: userId,
       };
       toInsert.push(row);
       live.set(row.id, { ...row, createdAt: new Date() } as Row);

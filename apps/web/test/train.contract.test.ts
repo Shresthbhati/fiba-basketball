@@ -1,6 +1,7 @@
 // @vitest-environment node
 // The real SetQueue against the real API (in-process, embedded Postgres): offline sets arrive once, retries never double count,
 // and the response shapes the training screens read are all present.
+import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
@@ -15,7 +16,7 @@ const memStore = (): SetStore => { const d = new Map<string, never>(); return { 
 describe("training API and SetQueue", () => {
   it("delivers offline sets exactly once and exposes the fields the screens read", async () => {
     const db = drizzle(new PGlite(), { schema });
-    await migrate(db, { migrationsFolder: new URL("../../../services/api/drizzle", import.meta.url).pathname });
+    await migrate(db, { migrationsFolder: fileURLToPath(new URL("../../../services/api/drizzle", import.meta.url)) });
     const app = await buildApp(db as never, { secureCookies: false });
     const su = await app.inject({ method: "POST", url: "/api/v1/auth/signup", payload: { email: "t@example.com", password: "correct-horse-battery", displayName: "Tia", dateOfBirth: "1990-01-01" } });
     const cookie = String(su.headers["set-cookie"]).split(";")[0]!;

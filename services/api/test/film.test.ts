@@ -1,6 +1,7 @@
 import { mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { LocalDiskStorage } from "../src/media/storage.js";
@@ -16,7 +17,7 @@ const teen = { dateOfBirth: `${new Date().getFullYear() - 15}-01-01` };
 
 async function setup(maxVideoBytes = 1000) {
   const db = drizzle(new PGlite(), { schema });
-  await migrate(db, { migrationsFolder: new URL("../drizzle", import.meta.url).pathname });
+  await migrate(db, { migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)) });
   const dir = await mkdtemp(join(tmpdir(), "film-test-"));
   const app = await buildApp(db as unknown as Db, {
     secureCookies: false, requireVerifiedGuardianEmail: false, mailer: new MemoryMailer(),

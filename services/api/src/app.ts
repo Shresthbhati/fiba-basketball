@@ -14,6 +14,8 @@ import { registerMatchScoring } from "./match/routes.js";
 import { registerCompetitions } from "./competition/routes.js";
 import { registerCourts } from "./court/routes.js";
 import { registerTraining } from "./training/routes.js";
+import { registerAthleticTesting } from "./training/testing-routes.js";
+import { registerPeriodizationPrograms } from "./training/program-routes.js";
 import { registerPickup } from "./pickup/routes.js";
 import { ConsoleMailer, type Mailer } from "./identity/mailer.js";
 import { registerIdentity } from "./identity/routes.js";
@@ -21,6 +23,13 @@ import { registerConsent } from "./consent/routes.js";
 import { registerTrust } from "./trust/routes.js";
 import { registerNotifications } from "./notifications/routes.js";
 import { registerFilm } from "./film/routes.js";
+import { registerReportRoutes } from "./film/report-routes.js";
+import { registerFilmSearchRoutes } from "./film/search-routes.js";
+import { registerAssessment } from "./assessment/index.js";
+import { registerPlaybook } from "./playbook/index.js";
+import { registerPassportRoutes } from "./career/passport-routes.js";
+import { registerPracticeRoutes } from "./practice/routes.js";
+import { registerCoachRoutes } from "./coach/routes.js";
 import { LocalDiskStorage, type MediaStorage } from "./media/storage.js";
 
 export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[]; mailer?: Mailer; webBaseUrl?: string; rateLimitScale?: number; requireVerifiedGuardianEmail?: boolean; storage?: MediaStorage; maxVideoBytes?: number; logger?: boolean; logStream?: { write(msg: string): void } } = {}): Promise<FastifyInstance> {
@@ -69,7 +78,16 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerCompetitions(app, db);
   registerNotifications(app, db);
   registerTraining(app, db);
+  registerAthleticTesting(app, db);
+  registerPeriodizationPrograms(app, db);
   registerFilm(app, db, opts.storage ?? new LocalDiskStorage(join(tmpdir(), "courtiq-media")), opts.maxVideoBytes ?? 1024 ** 3);
+  registerFilmSearchRoutes(app, db);
+  registerAssessment(app, db, opts.storage ?? new LocalDiskStorage(join(tmpdir(), "courtiq-media")));
+  registerPlaybook(app, db);
+  registerReportRoutes(app, db);
+  registerPassportRoutes(app, db);
+  registerPracticeRoutes(app, db);
+  registerCoachRoutes(app, db);
   registerMatchScoring(app, db, new MatchBus());
 
   // Liveness: the process is up. Readiness: it can reach the database (use this for load balancer checks).

@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@courtiq/court-renderer": "workspace:*",
+    "@courtiq/design-system": "workspace:*",
     "@tanstack/react-query": "^5.0.0",
     "next": "^16.4.2",
     "react": "^19.3.1",

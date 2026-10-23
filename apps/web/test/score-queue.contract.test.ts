@@ -1,5 +1,6 @@
 // @vitest-environment node
 // Drives the real ScoreQueue against the real API (in-process, embedded Postgres) so the client and server cannot drift apart.
+import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
@@ -17,7 +18,7 @@ const memStore = (): Store => {
 describe("ScoreQueue against the real API", () => {
   it("offline events sync to the real server, retries are idempotent, and two devices conflict then reconcile", async () => {
     const db = drizzle(new PGlite(), { schema });
-    await migrate(db, { migrationsFolder: new URL("../../../services/api/drizzle", import.meta.url).pathname });
+    await migrate(db, { migrationsFolder: fileURLToPath(new URL("../../../services/api/drizzle", import.meta.url)) });
     const app = await buildApp(db as never, { secureCookies: false });
 
     const signup = async (email: string) => {

@@ -2,8 +2,9 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { ApiError, api } from "../../lib/api";
+import { CourtMap, type PublicCourt } from "../../lib/court-map";
 
-type Court = { id: string; name: string; indoor: boolean; surface: string | null; hoops: number | null; distanceM: number; verificationStatus: string };
+type Court = PublicCourt;
 
 const km = (m: number) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1)} km`);
 
@@ -15,18 +16,39 @@ export default function Courts() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function search(e?: FormEvent, at?: { lat: string; lng: string }) {
+  async function search(e?: FormEvent, at?: { lat: string; lng: string }, radiusOverride?: string) {
     e?.preventDefault();
     setLoading(true);
     setError(null);
+    const targetLat = at?.lat ?? lat;
+    const targetLng = at?.lng ?? lng;
+    const targetRadius = radiusOverride ?? radius;
     try {
-      const r = await api<{ items: Court[] }>(`/courts/nearby?lat=${encodeURIComponent(at?.lat ?? lat)}&lng=${encodeURIComponent(at?.lng ?? lng)}&radius_m=${radius}`);
+      const r = await api<{ items: Court[] }>(
+        `/courts/nearby?lat=${encodeURIComponent(targetLat)}&lng=${encodeURIComponent(targetLng)}&radius_m=${targetRadius}`
+      );
       setCourts(r.items);
     } catch (err) {
       setCourts(null);
       setError(err instanceof ApiError ? err.message : "Could not reach the server.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  function handleCenterChange(newLat: number, newLng: number) {
+    const latStr = newLat.toFixed(4);
+    const lngStr = newLng.toFixed(4);
+    setLat(latStr);
+    setLng(lngStr);
+    void search(undefined, { lat: latStr, lng: lngStr });
+  }
+
+  function handleRadiusChange(newRadiusM: number) {
+    const radStr = String(newRadiusM);
+    setRadius(radStr);
+    if (lat && lng) {
+      void search(undefined, undefined, radStr);
     }
   }
 
@@ -39,8 +61,12 @@ export default function Courts() {
       await api("/courts", {
         method: "POST",
         body: {
-          name: f.get("name"), lat: Number(f.get("lat")), lng: Number(f.get("lng")), indoor: f.get("indoor") === "on",
-          ...(f.get("surface") ? { surface: f.get("surface") } : {}), ...(f.get("hoops") ? { hoops: Number(f.get("hoops")) } : {}),
+          name: f.get("name"),
+          lat: Number(f.get("lat")),
+          lng: Number(f.get("lng")),
+          indoor: f.get("indoor") === "on",
+          ...(f.get("surface") ? { surface: f.get("surface") } : {}),
+          ...(f.get("hoops") ? { hoops: Number(f.get("hoops")) } : {}),
         },
       });
       const at = { lat: String(f.get("lat")), lng: String(f.get("lng")) };
@@ -56,14 +82,25 @@ export default function Courts() {
   // Only runs when the person taps the button; we never ask for location on page load.
   function useMyLocation() {
     navigator.geolocation.getCurrentPosition(
-      (p) => { setLat(p.coords.latitude.toFixed(4)); setLng(p.coords.longitude.toFixed(4)); },
+      (p) => {
+        const myLat = p.coords.latitude.toFixed(4);
+        const myLng = p.coords.longitude.toFixed(4);
+        setLat(myLat);
+        setLng(myLng);
+        void search(undefined, { lat: myLat, lng: myLng });
+      },
       () => setError("Location permission denied. Enter coordinates instead."),
     );
   }
 
+  const centerLatNum = Number(lat) || 40.7128;
+  const centerLngNum = Number(lng) || -74.006;
+  const radiusNum = Number(radius) || 5000;
+
   return (
     <main>
       <h1>Find a court</h1>
+
       <form onSubmit={search} style={{ display: "grid", gap: 12, maxWidth: 420 }}>
         <label>Latitude<input value={lat} onChange={(e) => setLat(e.target.value)} inputMode="decimal" required placeholder="40.7128" /></label>
         <label>Longitude<input value={lng} onChange={(e) => setLng(e.target.value)} inputMode="decimal" required placeholder="-74.0060" /></label>
@@ -75,7 +112,20 @@ export default function Courts() {
         <button type="button" className="secondary" onClick={useMyLocation}>Use my current location</button>
         <button type="submit" disabled={loading}>{loading ? "Searching…" : "Search"}</button>
       </form>
+
       {error && <p role="alert" style={{ color: "#ff6b6b" }}>{error}</p>}
+
+      <div style={{ margin: "24px 0" }}>
+        <CourtMap
+          courts={courts ?? []}
+          centerLat={centerLatNum}
+          centerLng={centerLngNum}
+          radiusM={radiusNum}
+          onCenterChange={handleCenterChange}
+          onRadiusChange={handleRadiusChange}
+        />
+      </div>
+
       <details style={{ margin: "16px 0" }}>
         <summary>Add a court that isn't listed</summary>
         <form onSubmit={addCourt} aria-label="Add a court" style={{ display: "grid", gap: 12, maxWidth: 420, marginTop: 12 }}>
@@ -89,6 +139,7 @@ export default function Courts() {
           <button type="submit">Add court</button>
         </form>
       </details>
+
       {courts && courts.length === 0 && <p>No courts found within that radius. Try a larger radius or add a court.</p>}
       {courts && courts.length > 0 && (
         <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: 8 }}>
