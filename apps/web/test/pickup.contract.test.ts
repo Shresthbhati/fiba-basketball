@@ -1,5 +1,6 @@
 // @vitest-environment node
 // Checks the real API responses contain every field the pickup screens read, so the UI and server cannot drift apart.
+import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
@@ -10,7 +11,7 @@ import * as schema from "../../../services/api/src/db/schema";
 describe("pickup API shape", () => {
   it("returns the fields the web app depends on", async () => {
     const db = drizzle(new PGlite(), { schema });
-    await migrate(db, { migrationsFolder: new URL("../../../services/api/drizzle", import.meta.url).pathname });
+    await migrate(db, { migrationsFolder: fileURLToPath(new URL("../../../services/api/drizzle", import.meta.url)) });
     const app = await buildApp(db as never, { secureCookies: false });
     const su = await app.inject({ method: "POST", url: "/api/v1/auth/signup", payload: { email: "h@example.com", password: "correct-horse-battery", displayName: "Hana", dateOfBirth: "1990-01-01" } });
     const cookie = String(su.headers["set-cookie"]).split(";")[0]!;

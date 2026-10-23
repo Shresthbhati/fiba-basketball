@@ -3,7 +3,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ApiError, api } from "./api";
 import { BoxScore } from "./box-score";
+import { CommandCenterPanel } from "./command-center-panel";
 import { formatLabel, stateLabel, statusLabel, type CompetitionDetail, type MatchRow, type StandingRow } from "./competition-types";
+import { TournamentBracket } from "./tournament-bracket";
 
 const roundName = (round: number, last: number, knockout: boolean) =>
   !knockout ? `Round ${round}` : round === last ? "Final" : round === last - 1 ? "Semi-finals" : `Round ${round}`;
@@ -81,6 +83,7 @@ export function CompetitionPanel({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [openCC, setOpenCC] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -169,6 +172,31 @@ export function CompetitionPanel({ id }: { id: string }) {
             <input name="email" type="email" placeholder="their@email.com" required aria-label="Scorekeeper email" style={{ flex: 1 }} />
             <button type="submit" disabled={busy}>Add</button>
           </form>
+        </section>
+      )}
+
+      {comp.canManage && comp.status !== "DRAFT" && (
+        <section aria-label="Command Center">
+          <details
+            style={{ background: "var(--surface, #141418)", padding: 12, borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)" }}
+            onToggle={(e) => setOpenCC(e.currentTarget.open)}
+          >
+            <summary style={{ cursor: "pointer", fontWeight: "bold", fontSize: "1.1rem" }}>
+              ⚡ Tournament Command Center & Operations
+            </summary>
+            {openCC && (
+              <div style={{ marginTop: 16 }}>
+                <CommandCenterPanel competitionId={id} />
+              </div>
+            )}
+          </details>
+        </section>
+      )}
+
+      {knockout && matches.length > 0 && (
+        <section aria-label="Tournament Bracket">
+          <h2>Bracket</h2>
+          <TournamentBracket matches={matches} teams={comp.teams} canManage={comp.canManage} />
         </section>
       )}
 

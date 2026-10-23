@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
@@ -8,7 +9,7 @@ import * as schema from "../src/db/schema.js";
 
 export async function testApp() {
   const db = drizzle(new PGlite(), { schema });
-  await migrate(db, { migrationsFolder: new URL("../drizzle", import.meta.url).pathname });
+  await migrate(db, { migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)) });
   const mailer = new MemoryMailer();
   const app = await buildApp(db as unknown as Db, { secureCookies: false, requireVerifiedGuardianEmail: false, mailer, webBaseUrl: "http://web.test" });
   return { app, db: db as unknown as Db, mailer };

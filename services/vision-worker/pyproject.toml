@@ -1,0 +1,10 @@
+[project]
+name = "courtiq-vision-worker"
+version = "0.1.0"
+description = "COURT IQ Computer Vision & Biomechanics Worker"
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

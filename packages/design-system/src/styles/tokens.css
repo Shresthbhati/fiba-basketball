@@ -1,0 +1,39 @@
+:root {
+  --cq-bg-canvas: #0a0a0c;
+  --cq-bg-surface: #141418;
+  --cq-bg-surface-elevated: #1c1c24;
+  --cq-bg-surface-highlight: #252532;
+
+  --cq-text-primary: #f3f4f6;
+  --cq-text-secondary: #d1d5db;
+  --cq-text-muted: #9ca3af;
+  --cq-text-subtle: #6b7280;
+  --cq-text-inverse: #0a0a0c;
+
+  --cq-border-default: rgba(255, 255, 255, 0.08);
+  --cq-border-hover: rgba(255, 255, 255, 0.16);
+  --cq-border-focus: #f97316;
+
+  --cq-brand-orange: #f97316;
+  --cq-brand-orange-muted: rgba(249, 115, 22, 0.15);
+  --cq-brand-orange-hover: #ea580c;
+  --cq-brand-amber: #f59e0b;
+
+  --cq-status-success: #22c55e;
+  --cq-status-success-muted: rgba(34, 197, 94, 0.15);
+  --cq-status-warning: #f59e0b;
+  --cq-status-warning-muted: rgba(245, 158, 11, 0.15);
+  --cq-status-danger: #ef4444;
+  --cq-status-danger-muted: rgba(239, 68, 68, 0.15);
+  --cq-status-info: #3b82f6;
+  --cq-status-info-muted: rgba(59, 130, 246, 0.15);
+
+  --cq-radius-sm: 4px;
+  --cq-radius-md: 8px;
+  --cq-radius-lg: 12px;
+  --cq-radius-xl: 16px;
+  --cq-radius-full: 9999px;
+
+  --cq-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --cq-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}

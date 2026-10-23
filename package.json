@@ -8,7 +8,8 @@
   "scripts": {
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
+    "test": "pnpm -r --workspace-concurrency 1 test",
+    "test:vision": "python -m unittest discover -s services/vision-worker/eval -p \"test_*.py\"",
     "build": "pnpm -r build",
     "e2e": "playwright test -c tests/e2e"
   },

@@ -5,8 +5,9 @@ import { can } from "../authz/service.js";
 import type { Db } from "../db/index.js";
 import { AuthError } from "../identity/service.js";
 import {
-  competitionStandings, createCompetition, listCompetitions, createTeam, generateSchedule, getMatch, getTeam, listMatches, listTeams,
-  lockMatch, matchDetail, recordForfeit, recordResult, setMatchTime, registerTeam, visibleCompetition,
+  applyDelay, competitionStandings, createCompetition, listCompetitions, createTeam, generateSchedule,
+  getCommandCenter, getCompetitionOfficials, getMatch, getTeam, listMatches, listTeams,
+  lockMatch, matchDetail, previewDelayImpact, recordForfeit, recordResult, setMatchTime, registerTeam, visibleCompetition,
 } from "./service.js";
 
 const id = z.object({ id: z.uuid() });
@@ -89,6 +90,27 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
     await visibleCompetition(db, cid, manager);
     return { items: await competitionStandings(db, cid) };
   });
+
+  app.get("/api/v1/competitions/:id/officials", { config: { access: manage } }, async (req) => ({
+    items: await getCompetitionOfficials(db, compId(req)),
+  }));
+
+  app.get("/api/v1/competitions/:id/command-center", { config: { access: manage } }, async (req) =>
+    getCommandCenter(db, compId(req)),
+  );
+
+  const delayInput = z.object({
+    matchId: z.uuid(),
+    delayMinutes: z.number().int().min(1).max(360),
+  });
+
+  app.post("/api/v1/competitions/:id/delay-impact", { config: { access: manage } }, async (req) =>
+    previewDelayImpact(db, compId(req), delayInput.parse(req.body)),
+  );
+
+  app.post("/api/v1/competitions/:id/apply-delay", { config: { access: manage } }, async (req) =>
+    applyDelay(db, compId(req), delayInput.parse(req.body)),
+  );
 
   const manageMatch = { action: "competition:manage", hide: true, resource: matchRef } as const;
 

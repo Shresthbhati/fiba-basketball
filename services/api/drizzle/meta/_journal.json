@@ -134,6 +134,90 @@
       "when": 1792734086809,
       "tag": "0018_match_event_sub_out",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792735000000,
+      "tag": "0019_exercise_library_expansion",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792736000000,
+      "tag": "0020_movement_assessments",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792737000000,
+      "tag": "0021_tactical_plays",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792738000000,
+      "tag": "0022_tactical_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792739000000,
+      "tag": "0023_athlete_passport",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792740000000,
+      "tag": "0024_practice_planner",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792741000000,
+      "tag": "0025_film_library_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792742000000,
+      "tag": "0026_assessment_sharing_and_feedback",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792743000000,
+      "tag": "0027_coach_assignments",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792744000000,
+      "tag": "0028_match_events_shot_coords",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792745000000,
+      "tag": "0029_athletic_testing",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792746000000,
+      "tag": "0030_training_programs",
+      "breakpoints": true
     }
   ]
 }

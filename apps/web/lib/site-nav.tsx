@@ -26,6 +26,11 @@ export function SiteNav() {
       <Link href="/train">Train</Link>
       <Link href="/competitions">Competitions</Link>
       <Link href="/teams">Teams</Link>
+      <Link href="/film/search">Film</Link>
+      <Link href="/playbook">Playbook</Link>
+      <Link href="/practices">Practices</Link>
+      <Link href="/assignments">Assignments</Link>
+      <Link href="/coach">Coach</Link>
       {user && <Link href="/career">Record</Link>}
       <span style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
         <SyncIndicator />

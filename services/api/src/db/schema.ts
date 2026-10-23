@@ -1,4 +1,4 @@
-import { boolean, date, doublePrecision, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, doublePrecision, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -191,6 +191,11 @@ export const matchEvents = pgTable(
     playerId: uuid("player_id").references(() => users.id),
     // SUBSTITUTION only: the rostered player leaving the court (player_id is the one coming on). Null for a starter declared on court.
     playerOutId: uuid("player_out_id").references(() => users.id),
+    // Shot coordinates (in meters relative to attacking half court) and spatial zone classification (WP-3.4)
+    coordX: doublePrecision("coord_x"),
+    coordY: doublePrecision("coord_y"),
+    shotZone: text("shot_zone"),
+    distanceMeters: doublePrecision("distance_meters"),
     // When the scorer's device recorded the event (client clock). Used to line events up with game film; null if not sent or implausible.
     occurredAt: timestamp("occurred_at", { withTimezone: true }),
     createdBy: uuid("created_by").notNull().references(() => users.id),
@@ -446,3 +451,486 @@ export const filmSyncPoints = pgTable(
   },
   (t) => [primaryKey({ columns: [t.gameId, t.eventId] })],
 );
+
+/** Biomechanical movement assessments (Pillar 1, Master Spec §4, ADR-0006). Private to owner (ADR-0009). */
+export const movementAssessments = pgTable(
+  "movement_assessments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    protocol: text("protocol").notNull(), // BODYWEIGHT_SQUAT | COUNTERMOVEMENT_JUMP
+    status: text("status").notNull(), // ACCEPTED | NEEDS_REVIEW | ABSTAINED
+    sourceType: text("source_type").notNull().default("CV_ESTIMATE"),
+    confidence: numeric("confidence", { precision: 4, scale: 3 }),
+    modelVersion: text("model_version").notNull().default("court-iq-pose-v1.0"),
+    protocolVersion: text("protocol_version").notNull().default("protocol-v1.0"),
+    repCount: integer("rep_count").notNull().default(0),
+    metrics: jsonb("metrics").$type<Record<string, unknown>>(),
+    criteriaUnmeasurable: jsonb("criteria_unmeasurable").$type<string[]>().notNull().default([]),
+    feedback: jsonb("feedback").$type<string[]>().notNull().default([]),
+    abstainReason: text("abstain_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("movement_assessments_user_idx").on(t.userId, t.createdAt)],
+);
+
+/** Tactical Plays & Diagrams (Pillar 4, Master Spec §7, ADR-0007). */
+export const tacticalPlays = pgTable(
+  "tactical_plays",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    description: text("description"),
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "set null" }),
+    createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+    courtMode: text("court_mode").notNull().default("half"),
+    category: text("category").notNull().default("offense"),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    keyframes: jsonb("keyframes").$type<Array<{
+      step: number;
+      description: string;
+      tokens: Array<{ id: string; type: string; label: string; x: number; y: number }>;
+      actions: Array<{ id: string; type: string; from: { x: number; y: number }; to: { x: number; y: number }; label?: string | undefined }>;
+    }>>().notNull().default([]),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("tactical_plays_team_idx").on(t.teamId),
+    index("tactical_plays_created_by_idx").on(t.createdBy),
+  ],
+);
+
+/** Evidence-linked tactical reports (WP-3.5, Master Spec §6.4, §12). Team-scoped; private to members (ADR-0010). */
+export const tacticalReports = pgTable(
+  "tactical_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    summary: text("summary"),
+    createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    blocks: jsonb("blocks").$type<Array<{
+      id: string;
+      title: string;
+      claimType: "OBSERVED" | "DERIVED" | "HYPOTHESIS";
+      statement: string;
+      sampleSize?: number | undefined;
+      confidence?: number | undefined;
+      citations: Array<{
+        citationType: "CLIP" | "EVENT" | "METRIC";
+        targetId: string;
+        gameId?: string | undefined;
+        timestampMs?: number | undefined;
+        note?: string | undefined;
+      }>;
+    }>>().notNull().default([]),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("tactical_reports_team_idx").on(t.teamId),
+    index("tactical_reports_created_by_idx").on(t.createdBy),
+  ],
+);
+
+/** Athlete Career Passport share grants (WP-8.1, Master Spec §11, ADR-0010). Field-level granular privacy grants. */
+export const athletePassportGrants = pgTable(
+  "athlete_passport_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    label: text("label"),
+    includeAverages: boolean("include_averages").notNull().default(true),
+    includeShootingSplits: boolean("include_shooting_splits").notNull().default(true),
+    includeMinutes: boolean("include_minutes").notNull().default(false),
+    includeGameLog: boolean("include_game_log").notNull().default(true),
+    includeBiometrics: boolean("include_biometrics").notNull().default(false),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("athlete_passport_grants_user_idx").on(t.userId),
+    uniqueIndex("athlete_passport_grants_token_idx").on(t.token),
+  ],
+);
+
+/** Verified athlete achievements with issuer provenance (WP-8.2, Master Spec §11). */
+export const verifiedAchievements = pgTable(
+  "verified_achievements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    competitionId: uuid("competition_id").references(() => competitions.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    category: text("category").notNull(), // AWARD | CHAMPIONSHIP | SELECTION
+    issuer: text("issuer").notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("verified_achievements_user_idx").on(t.userId)],
+);
+
+/** Basketball practice drills catalog (WP-4.3, Master Spec §9.2). */
+export const practiceDrills = pgTable(
+  "practice_drills",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    category: text("category").notNull(), // WARMUP | TECHNICAL | TACTICAL | SCRIMMAGE | COOLDOWN
+    intensity: text("intensity").notNull().default("MEDIUM"), // LOW | MEDIUM | HIGH
+    suggestedDurationMins: integer("suggested_duration_mins").notNull().default(10),
+    brief: text("brief"),
+    playId: uuid("play_id").references(() => tacticalPlays.id, { onDelete: "set null" }),
+    clipId: uuid("clip_id").references(() => filmClips.id, { onDelete: "set null" }),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("practice_drills_team_idx").on(t.teamId)],
+);
+
+/** Sequenced team practice plans (WP-4.3, Master Spec §9.2). Team-scoped (ADR-0010). */
+export const practiceSessions = pgTable(
+  "practice_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    location: text("location"),
+    focus: text("focus"),
+    notes: text("notes"),
+    blocks: jsonb("blocks").$type<Array<{
+      id: string;
+      order: number;
+      drillId?: string | undefined;
+      title: string;
+      category: "WARMUP" | "TECHNICAL" | "TACTICAL" | "SCRIMMAGE" | "COOLDOWN";
+      durationMins: number;
+      notes?: string | undefined;
+      playId?: string | undefined;
+      clipId?: string | undefined;
+    }>>().notNull().default([]),
+    totalDurationMins: integer("total_duration_mins").notNull().default(0),
+    attendance: jsonb("attendance").$type<Array<{
+      userId: string;
+      status: "PRESENT" | "ABSENT" | "EXCUSED" | "INJURED";
+      note?: string | undefined;
+    }>>().notNull().default([]),
+    status: text("status").notNull().default("SCHEDULED"), // SCHEDULED | IN_PROGRESS | COMPLETED | CANCELLED
+    createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("practice_sessions_team_idx").on(t.teamId),
+    index("practice_sessions_scheduled_idx").on(t.scheduledAt),
+  ],
+);
+
+/** Scouting Montages & Highlight Playlists (WP-3.3, Master Spec §6.5). Team-scoped; private to members (ADR-0010). */
+export const scoutingMontages = pgTable(
+  "scouting_montages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    items: jsonb("items").$type<Array<{
+      clipId: string;
+      gameId: string;
+      order: number;
+      startMs: number;
+      endMs: number;
+      title?: string | undefined;
+      note?: string | undefined;
+      tags?: string[] | undefined;
+    }>>().notNull().default([]),
+    totalDurationMs: integer("total_duration_ms").notNull().default(0),
+    createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("scouting_montages_team_idx").on(t.teamId),
+    index("scouting_montages_created_by_idx").on(t.createdBy),
+  ],
+);
+
+/** Film Saved Searches for tactical discovery & film library (WP-3.3). */
+export const filmSavedSearches = pgTable(
+  "film_saved_searches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    filters: jsonb("filters").$type<{
+      q?: string | undefined;
+      tag?: string | undefined;
+      gameId?: string | undefined;
+      minDurationMs?: number | undefined;
+      maxDurationMs?: number | undefined;
+    }>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("film_saved_searches_team_user_idx").on(t.teamId, t.userId),
+  ],
+);
+
+/** Biomechanical assessment sharing grants (WP-2.8, Master Spec §4.5, ADR-0009). */
+export const assessmentShareGrants = pgTable(
+  "assessment_share_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id").notNull().references(() => movementAssessments.id, { onDelete: "cascade" }),
+    athleteId: uuid("athlete_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    granteeId: uuid("grantee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("COACH"), // COACH | TRAINER | HEALTH_PRO
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("assessment_share_grants_assessment_grantee_idx").on(t.assessmentId, t.granteeId),
+    index("assessment_share_grants_grantee_idx").on(t.granteeId),
+  ],
+);
+
+/** Coach feedback & drill prescriptions for movement assessments (WP-2.8, Master Spec §4.6). */
+export const assessmentCoachFeedback = pgTable(
+  "assessment_coach_feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id").notNull().references(() => movementAssessments.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    authorRole: text("author_role").notNull().default("COACH"),
+    notes: text("notes").notNull(),
+    cues: jsonb("cues").$type<string[]>().notNull().default([]),
+    suggestedDrillId: uuid("suggested_drill_id").references(() => practiceDrills.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("assessment_coach_feedback_assessment_idx").on(t.assessmentId),
+  ],
+);/** Coach assignments for film study, drills, workouts & movement tests (WP-4.4, Master Spec §9.3). */
+export const coachAssignments = pgTable(
+  "coach_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    coachId: uuid("coach_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    type: text("type").notNull(), // FILM_STUDY | DRILL_PRACTICE | WORKOUT_PRESCRIPTION | MOVEMENT_ASSESSMENT
+    priority: text("priority").notNull().default("NORMAL"), // LOW | NORMAL | HIGH | URGENT
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    resourceRef: jsonb("resource_ref").$type<{
+      type: "FILM_CLIP" | "SCOUTING_MONTAGE" | "TACTICAL_PLAY" | "PRACTICE_DRILL" | "ASSESSMENT" | "WORKOUT";
+      id: string;
+      title?: string | undefined;
+    }>(),
+    quizQuestions: jsonb("quiz_questions").$type<Array<{
+      id: string;
+      question: string;
+      options: string[];
+      correctOptionIndex: number;
+    }>>().notNull().default([]),
+    targetAthleteIds: jsonb("target_athlete_ids").$type<string[]>().notNull().default([]),
+    status: text("status").notNull().default("ACTIVE"), // ACTIVE | ARCHIVED
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("coach_assignments_team_idx").on(t.teamId),
+    index("coach_assignments_coach_idx").on(t.coachId),
+  ],
+);
+
+/** Athlete submissions and coach reviews for coach assignments (WP-4.4 / WP-4.5, Master Spec §9.3). */
+export const assignmentSubmissions = pgTable(
+  "assignment_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assignmentId: uuid("assignment_id").notNull().references(() => coachAssignments.id, { onDelete: "cascade" }),
+    athleteId: uuid("athlete_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("SUBMITTED"), // SUBMITTED | REVIEWED | REVISION_REQUESTED
+    answers: jsonb("answers").$type<{
+      selectedOptions?: Record<string, number> | undefined;
+      athleteNotes?: string | undefined;
+      resourceId?: string | undefined;
+    }>().notNull().default({}),
+    score: integer("score"),
+    coachNotes: text("coach_notes"),
+    reviewedBy: uuid("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("assignment_submissions_assignment_athlete_idx").on(t.assignmentId, t.athleteId),
+    index("assignment_submissions_athlete_idx").on(t.athleteId),
+  ],
+);
+
+/** Standardized athletic testing protocols (WP-6.2, Master Spec §5.4). */
+export const athleticTestProtocols = pgTable(
+  "athletic_test_protocols",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: varchar("slug", { length: 64 }).notNull().unique(),
+    name: varchar("name", { length: 120 }).notNull(),
+    category: varchar("category", { length: 32 }).notNull(), // JUMP | SPEED | AGILITY | CONDITIONING
+    description: text("description").notNull(),
+    primaryMetricUnit: varchar("primary_metric_unit", { length: 16 }).notNull(), // cm | seconds | level_shuttle
+    sortDirection: varchar("sort_direction", { length: 8 }).notNull().default("DESC"), // DESC | ASC
+    equipmentRequirements: text("equipment_requirements").notNull(),
+    warmupRecommendations: text("warmup_recommendations").notNull(),
+    standardAttempts: integer("standard_attempts").notNull().default(3),
+    isCombineCore: boolean("is_combine_core").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
+/** Athletic test sessions grouping combine tests on a given date (WP-6.2, Master Spec §5.4). */
+export const athleticTestSessions = pgTable(
+  "athletic_test_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    conductedByUserId: uuid("conducted_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "set null" }),
+    testDate: date("test_date", { mode: "string" }).notNull(),
+    location: varchar("location", { length: 120 }),
+    surface: varchar("surface", { length: 32 }).notNull().default("HARDWOOD"),
+    environmentalNotes: text("environmental_notes"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("athletic_test_sessions_user_idx").on(t.userId),
+    index("athletic_test_sessions_team_idx").on(t.teamId),
+    index("athletic_test_sessions_date_idx").on(t.testDate),
+  ],
+);
+
+/** Individual test attempts with instrument metadata and source provenance (WP-6.2, ADR-0008). */
+export const athleticTestAttempts = pgTable(
+  "athletic_test_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id").notNull().references(() => athleticTestSessions.id, { onDelete: "cascade" }),
+    protocolId: uuid("protocol_id").notNull().references(() => athleticTestProtocols.id, { onDelete: "cascade" }),
+    attemptNumber: integer("attempt_number").notNull(),
+    rawValue: doublePrecision("raw_value").notNull(),
+    isFault: boolean("is_fault").notNull().default(false),
+    faultReason: varchar("fault_reason", { length: 120 }),
+    instrumentType: varchar("instrument_type", { length: 32 }).notNull().default("VERTEC_VANES"),
+    instrumentDetails: jsonb("instrument_details").$type<{
+      model?: string | undefined;
+      serialNumber?: string | undefined;
+      beamHeightCm?: number | undefined;
+      calibrationDate?: string | undefined;
+    }>().notNull().default({}),
+    sourceType: varchar("source_type", { length: 32 }).notNull().default("SELF_REPORTED"),
+    confidence: doublePrecision("confidence").notNull().default(1.0),
+    notes: varchar("notes", { length: 255 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("athletic_test_attempts_session_idx").on(t.sessionId),
+    index("athletic_test_attempts_protocol_idx").on(t.protocolId),
+  ],
+);
+
+export interface PrescribedExerciseItem {
+  exerciseId?: string | undefined;
+  exerciseSlug: string;
+  exerciseName: string;
+  orderIndex: number;
+  targetSets: number;
+  targetReps: number;
+  targetRpe?: number | undefined;
+  restSeconds?: number | undefined;
+  notes?: string | undefined;
+}
+
+/** Basketball-specific periodized training programs (WP-6.1, Master Spec §5). */
+export const trainingPrograms = pgTable(
+  "training_programs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: varchar("slug", { length: 80 }).notNull().unique(),
+    name: varchar("name", { length: 150 }).notNull(),
+    phase: varchar("phase", { length: 32 }).notNull(), // OFF_SEASON | PRE_SEASON | IN_SEASON | TOURNAMENT_PEAK
+    description: text("description").notNull(),
+    durationWeeks: integer("duration_weeks").notNull().default(4),
+    daysPerWeek: integer("days_per_week").notNull().default(3),
+    targetLevel: varchar("target_level", { length: 32 }).notNull().default("INTERMEDIATE"), // BEGINNER | INTERMEDIATE | ADVANCED | ELITE
+    primaryGoal: varchar("primary_goal", { length: 64 }).notNull(), // VERTICAL_POWER | HYPERTROPHY_BASE | REPEAT_SPRINT_ABILITY | FATIGUE_MANAGEMENT | TOURNAMENT_READINESS
+    isTemplate: boolean("is_template").notNull().default(true),
+    creatorId: uuid("creator_id").references(() => users.id, { onDelete: "set null" }),
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "set null" }),
+    reviewed: boolean("reviewed").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("training_programs_phase_idx").on(t.phase),
+    index("training_programs_team_idx").on(t.teamId),
+  ],
+);
+
+/** Prescribed workout days within a periodized training program (WP-6.1). */
+export const trainingProgramWorkouts = pgTable(
+  "training_program_workouts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    programId: uuid("program_id").notNull().references(() => trainingPrograms.id, { onDelete: "cascade" }),
+    weekNumber: integer("week_number").notNull(),
+    dayNumber: integer("day_number").notNull(),
+    title: varchar("title", { length: 150 }).notNull(),
+    focus: varchar("focus", { length: 64 }).notNull(),
+    estimatedDurationMin: integer("estimated_duration_min").notNull().default(45),
+    exercisesPrescription: jsonb("exercises_prescription").$type<PrescribedExerciseItem[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("training_program_workouts_program_idx").on(t.programId, t.weekNumber, t.dayNumber),
+  ],
+);
+
+/** Athlete enrollments and adherence tracking for training programs (WP-6.1). */
+export const programEnrollments = pgTable(
+  "program_enrollments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    programId: uuid("program_id").notNull().references(() => trainingPrograms.id, { onDelete: "cascade" }),
+    athleteId: uuid("athlete_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    assignedByUserId: uuid("assigned_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    startDate: date("start_date", { mode: "string" }).notNull(),
+    currentWeek: integer("current_week").notNull().default(1),
+    status: varchar("status", { length: 32 }).notNull().default("ACTIVE"), // ACTIVE | PAUSED | COMPLETED | CANCELLED
+    completedWorkoutIds: jsonb("completed_workout_ids").$type<string[]>().notNull().default([]),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("program_enrollments_athlete_idx").on(t.athleteId, t.status),
+    index("program_enrollments_program_idx").on(t.programId),
+  ],
+);
+
+
+
+
+

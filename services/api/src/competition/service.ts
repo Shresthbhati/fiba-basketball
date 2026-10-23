@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { grantRole } from "../authz/service.js";
 import type { Db } from "../db/index.js";
-import { competitionTeams, competitions, matchResultLog, matches, teams } from "../db/schema.js";
+import { competitionTeams, competitions, matchResultLog, matches, roleAssignments, teams, users } from "../db/schema.js";
 import { AuthError } from "../identity/service.js";
 import { canTransition, type MatchState } from "../match/match-state.js";
 import { roundRobin, singleElimination } from "./schedule.js";
@@ -214,4 +214,140 @@ export async function competitionStandings(db: Db, competitionId: string) {
   }));
   const names = new Map(reg.map((t) => [t.id, t.name]));
   return standings(reg.map((t) => t.id), results).map((row, i) => ({ rank: i + 1, name: names.get(row.team)!, ...row }));
+}
+
+/** Lists all assigned officials (scorekeepers & referees) for a competition. */
+export async function getCompetitionOfficials(db: Db, competitionId: string) {
+  return db
+    .select({
+      id: roleAssignments.id,
+      userId: roleAssignments.userId,
+      role: roleAssignments.role,
+      email: users.email,
+      displayName: users.displayName,
+      createdAt: roleAssignments.createdAt,
+    })
+    .from(roleAssignments)
+    .innerJoin(users, eq(roleAssignments.userId, users.id))
+    .where(
+      and(
+        eq(roleAssignments.resourceType, "competition"),
+        eq(roleAssignments.resourceId, competitionId),
+        inArray(roleAssignments.role, ["SCOREKEEPER", "REFEREE"]),
+      ),
+    );
+}
+
+/** Complete tournament command center view with live operations alerts, delays, and officials status. */
+export async function getCommandCenter(db: Db, competitionId: string) {
+  const c = await getCompetition(db, competitionId);
+  const allMatches = await listMatches(db, competitionId);
+  const teamList = await listTeams(db, competitionId);
+  const teamMap = new Map(teamList.map((t) => [t.id, t.name]));
+  const officials = await getCompetitionOfficials(db, competitionId);
+  const now = new Date();
+
+  const formattedMatches = allMatches.map((m) => {
+    const isDelayed = !m.isBye && m.state === "SCHEDULED" && m.scheduledAt !== null && new Date(m.scheduledAt) < now;
+    const isUnresolved = m.state === "LIVE" || (m.state === "FINISHED" && m.homeScore === null);
+    const missingOfficials = !m.isBye && m.state !== "LOCKED" && officials.length === 0;
+
+    return {
+      id: m.id,
+      round: m.round,
+      slot: m.slot,
+      homeTeamId: m.homeTeamId,
+      awayTeamId: m.awayTeamId,
+      homeName: m.homeTeamId ? teamMap.get(m.homeTeamId) ?? "?" : "TBD",
+      awayName: m.awayTeamId ? teamMap.get(m.awayTeamId) ?? "?" : "TBD",
+      state: m.state,
+      isBye: m.isBye,
+      scheduledAt: m.scheduledAt ? m.scheduledAt.toISOString() : null,
+      homeScore: m.homeScore,
+      awayScore: m.awayScore,
+      forfeit: m.forfeit,
+      alerts: {
+        delayed: isDelayed,
+        unresolved: isUnresolved,
+        missingOfficials,
+      },
+    };
+  });
+
+  const delayedCount = formattedMatches.filter((m) => m.alerts.delayed).length;
+  const unresolvedCount = formattedMatches.filter((m) => m.alerts.unresolved).length;
+  const liveCount = formattedMatches.filter((m) => m.state === "LIVE").length;
+  const finishedCount = formattedMatches.filter((m) => m.state === "FINISHED" || m.state === "LOCKED").length;
+
+  return {
+    competition: { id: c.id, name: c.name, format: c.format, status: c.status },
+    summary: {
+      totalMatches: allMatches.length,
+      scheduled: allMatches.filter((m) => m.state === "SCHEDULED").length,
+      live: liveCount,
+      finished: finishedCount,
+      delayed: delayedCount,
+      unresolved: unresolvedCount,
+      officialsCount: officials.length,
+    },
+    officials,
+    matches: formattedMatches,
+  };
+}
+
+/** Previews downstream schedule delay without mutating database records. */
+export async function previewDelayImpact(db: Db, competitionId: string, input: { matchId: string; delayMinutes: number }) {
+  const target = await getMatch(db, input.matchId);
+  if (target.competitionId !== competitionId) throw new AuthError(404, "Not Found");
+  if (target.isBye || target.state === "FINISHED" || target.state === "LOCKED") {
+    throw new AuthError(409, "Cannot delay a finished, locked or bye match");
+  }
+  const allMatches = await listMatches(db, competitionId);
+  const teamList = await listTeams(db, competitionId);
+  const teamMap = new Map(teamList.map((t) => [t.id, t.name]));
+
+  const delayMs = input.delayMinutes * 60 * 1000;
+  const targetTime = target.scheduledAt ? new Date(target.scheduledAt) : new Date();
+
+  // Downstream matches: target match plus any match scheduled at or after targetTime that is not finished/locked
+  const affected = allMatches.filter((m) => {
+    if (m.isBye || m.state === "FINISHED" || m.state === "LOCKED") return false;
+    if (m.id === target.id) return true;
+    if (!m.scheduledAt) return false;
+    return new Date(m.scheduledAt) >= targetTime;
+  });
+
+  const simulations = affected.map((m) => {
+    const origTime = m.scheduledAt ? new Date(m.scheduledAt) : targetTime;
+    const proposed = new Date(origTime.getTime() + delayMs);
+    return {
+      matchId: m.id,
+      round: m.round,
+      slot: m.slot,
+      homeName: m.homeTeamId ? teamMap.get(m.homeTeamId) ?? "?" : "TBD",
+      awayName: m.awayTeamId ? teamMap.get(m.awayTeamId) ?? "?" : "TBD",
+      state: m.state,
+      currentScheduledAt: m.scheduledAt ? m.scheduledAt.toISOString() : null,
+      proposedScheduledAt: proposed.toISOString(),
+      delayMinutes: input.delayMinutes,
+    };
+  });
+
+  return {
+    matchId: input.matchId,
+    delayMinutes: input.delayMinutes,
+    affectedCount: simulations.length,
+    simulations,
+  };
+}
+
+/** Atomically commits the delay to the target and all downstream matches. */
+export async function applyDelay(db: Db, competitionId: string, input: { matchId: string; delayMinutes: number }) {
+  const impact = await previewDelayImpact(db, competitionId, input);
+  return tx(db, async (t) => {
+    for (const sim of impact.simulations) {
+      await t.update(matches).set({ scheduledAt: new Date(sim.proposedScheduledAt) }).where(eq(matches.id, sim.matchId));
+    }
+    return impact;
+  });
 }

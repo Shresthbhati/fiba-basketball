@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
@@ -36,7 +37,7 @@ describe("pure helpers", () => {
 type U = { id: string; cookie: string };
 async function setup() {
   const db = drizzle(new PGlite(), { schema });
-  await migrate(db, { migrationsFolder: new URL("../drizzle", import.meta.url).pathname });
+  await migrate(db, { migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)) });
   const dir = await mkdtemp(join(tmpdir(), "sync-test-"));
   const app = await buildApp(db as unknown as Db, { secureCookies: false, requireVerifiedGuardianEmail: false, mailer: new MemoryMailer(), storage: new LocalDiskStorage(dir) });
   return { app, db: db as unknown as Db };

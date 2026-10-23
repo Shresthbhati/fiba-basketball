@@ -3,13 +3,14 @@ import { z } from "zod";
 import { can, grantRole } from "../authz/service.js";
 import { getCompetition, getMatch, recordResult, visibleCompetition } from "../competition/service.js";
 import type { Db } from "../db/index.js";
-import { users } from "../db/schema.js";
+import { matchEvents, users } from "../db/schema.js";
 import { AuthError } from "../identity/service.js";
 import type { MatchBus } from "./bus.js";
 import { ConflictError, batchInput, listEvents, matchState, submitEvents } from "./events.js";
 import { and, asc, eq } from "drizzle-orm";
 import { competitionRosters } from "../db/schema.js";
 import { boxScore } from "./box-score.js";
+import { buildShotChart } from "./shot-chart.js";
 import { hasLineup, secondsOnCourt, type MinuteEvent } from "./minutes.js";
 import { matchEventsOf } from "./events.js";
 
@@ -69,6 +70,107 @@ export function registerMatchScoring(app: FastifyInstance, db: Db, bus: MatchBus
       out[side] = { players, unattributed: stats.unattributed[side], total: stats.totals[side] };
     }
     return out;
+  });
+
+  /**
+   * Verified Shot Chart & Zone Efficiency (WP-3.4, Master Spec §6.4).
+   * Derived from official match events with geometric zone categorization and sample size indicators.
+   */
+  app.get("/api/v1/matches/:id/shot-chart", { config: { access: "public" } }, async (req) => {
+    const m = await viewable(req);
+    const query = z.object({
+      side: z.enum(["home", "away"]).optional(),
+      playerId: z.string().uuid().optional(),
+      period: z.coerce.number().int().min(1).max(10).optional(),
+    }).parse(req.query);
+
+    let events = await matchEventsOf(db, m.id);
+    if (query.side) {
+      events = events.filter((e) => e.side === query.side);
+    }
+    if (query.playerId) {
+      events = events.filter((e) => e.playerId === query.playerId);
+    }
+    if (query.period) {
+      events = events.filter((e) => e.period === query.period);
+    }
+
+    const rosterMap = new Map<string, { name: string; jersey: number }>();
+    for (const side of ["home", "away"] as const) {
+      const teamId = side === "home" ? m.homeTeamId : m.awayTeamId;
+      const seesNames = req.user && teamId
+        ? (await can(db, req.user.id, "team:view", { type: "team", id: teamId })) || (await can(db, req.user.id, "competition:manage", { type: "competition", id: m.competitionId }))
+        : false;
+      const rows = await rosterOf(m.competitionId, teamId);
+      for (const r of rows) {
+        rosterMap.set(r.userId, {
+          name: seesNames ? r.name : `#${r.jersey}`,
+          jersey: r.jersey,
+        });
+      }
+    }
+
+    const shotChart = buildShotChart(events.map((e) => ({
+      id: e.id,
+      type: e.type as never,
+      side: e.side as never,
+      period: e.period,
+      clockSeconds: e.clockSeconds,
+      playerId: e.playerId,
+      correctsEventId: e.correctsEventId,
+      coordX: e.coordX,
+      coordY: e.coordY,
+      shotZone: e.shotZone,
+      distanceMeters: e.distanceMeters,
+    })), rosterMap);
+
+    return {
+      matchId: m.id,
+      competitionId: m.competitionId,
+      sourceType: "OFFICIAL",
+      ...shotChart,
+    };
+  });
+
+  /**
+   * Cumulative career shot chart for a player across all official matches (WP-3.4, Master Spec §11.1).
+   */
+  app.get("/api/v1/players/:id/shot-chart", { config: { access: "public" } }, async (req) => {
+    const playerId = paramId(req);
+    const [user] = await db.select({ id: users.id, name: users.displayName }).from(users).where(eq(users.id, playerId));
+    if (!user) {
+      throw new AuthError(404, "Player not found");
+    }
+
+    const events = await db
+      .select()
+      .from(matchEvents)
+      .where(eq(matchEvents.playerId, playerId))
+      .orderBy(asc(matchEvents.createdAt));
+
+    const rosterMap = new Map<string, { name: string; jersey: number }>();
+    rosterMap.set(playerId, { name: user.name, jersey: 0 });
+
+    const shotChart = buildShotChart(events.map((e) => ({
+      id: e.id,
+      type: e.type as never,
+      side: e.side as never,
+      period: e.period,
+      clockSeconds: e.clockSeconds,
+      playerId: e.playerId,
+      correctsEventId: e.correctsEventId,
+      coordX: e.coordX,
+      coordY: e.coordY,
+      shotZone: e.shotZone,
+      distanceMeters: e.distanceMeters,
+    })), rosterMap);
+
+    return {
+      playerId,
+      playerName: user.name,
+      sourceType: "OFFICIAL",
+      ...shotChart,
+    };
   });
 
   app.post("/api/v1/matches/:id/events", { config: { access: score } }, async (req, reply) => {
