@@ -30,7 +30,11 @@ export default function Train() {
       <h1 style={{ marginBottom: 0 }}>Train</h1>
       <WellnessCard />
       <button type="button" style={{ minHeight: 56, fontSize: 18 }} onClick={start}>Start a workout</button>
-      <p><Link href="/train/history">See your progress</Link></p>
+      <p>
+        <Link href="/train/history">See your progress</Link>
+        {" · "}
+        <Link href="/train/assessments">Player Lab Assessments</Link>
+      </p>
       {error && <p role="alert" style={{ color: "#ff6b6b" }}>{error}</p>}
       <section aria-label="Recent workouts">
         <h2>Recent workouts</h2>

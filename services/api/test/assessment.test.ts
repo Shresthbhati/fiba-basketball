@@ -155,4 +155,107 @@ describe("movement assessments (Pillar 1 & WP-2.6)", () => {
     });
     expect(otherList.json().items).toHaveLength(0);
   });
+
+  it("handles sharing grants, coach feedback, and immediate revocation (WP-2.8)", async () => {
+    const t = await testApp();
+    const athleteRes = await t.app.inject({ method: "POST", url: "/api/v1/auth/signup", body: adultBody({ email: "athlete-share@example.com" }) });
+    const athleteCookie = cookieOf(athleteRes);
+
+    const coachRes = await t.app.inject({ method: "POST", url: "/api/v1/auth/signup", body: adultBody({ email: "coach-feedback@example.com" }) });
+    const coachCookie = cookieOf(coachRes);
+    const coachId = coachRes.json().id;
+
+    // Athlete creates assessment
+    const created = (
+      await t.app.inject({
+        method: "POST",
+        url: "/api/v1/assessments",
+        headers: { cookie: athleteCookie },
+        body: {
+          protocol: "BODYWEIGHT_SQUAT",
+          status: "ACCEPTED",
+          confidence: 0.95,
+          repCount: 5,
+          metrics: { minKneeAngleDeg: 84.0 },
+        },
+      })
+    ).json();
+
+    // Coach cannot view assessment before grant -> 404
+    const coachGetBefore = await t.app.inject({
+      method: "GET",
+      url: `/api/v1/assessments/${created.id}`,
+      headers: { cookie: coachCookie },
+    });
+    expect(coachGetBefore.statusCode).toBe(404);
+
+    // Athlete shares assessment with coach
+    const grantRes = await t.app.inject({
+      method: "POST",
+      url: `/api/v1/assessments/${created.id}/grants`,
+      headers: { cookie: athleteCookie },
+      body: { granteeId: coachId, role: "COACH" },
+    });
+    expect(grantRes.statusCode).toBe(201);
+    const grant = grantRes.json();
+    expect(grant.granteeId).toBe(coachId);
+
+    // Coach can now access assessment -> 200
+    const coachGetAfter = await t.app.inject({
+      method: "GET",
+      url: `/api/v1/assessments/${created.id}`,
+      headers: { cookie: coachCookie },
+    });
+    expect(coachGetAfter.statusCode).toBe(200);
+    expect(coachGetAfter.json().id).toBe(created.id);
+
+    // Coach adds feedback with technical cues
+    const feedbackRes = await t.app.inject({
+      method: "POST",
+      url: `/api/v1/assessments/${created.id}/feedback`,
+      headers: { cookie: coachCookie },
+      body: {
+        notes: "Solid eccentric tempo. Maintain knee tracking over 2nd toe on ascent.",
+        cues: ["Drive through midfoot", "Keep chest upright"],
+      },
+    });
+    expect(feedbackRes.statusCode).toBe(201);
+    expect(feedbackRes.json().notes).toContain("Solid eccentric tempo");
+    expect(feedbackRes.json().cues).toHaveLength(2);
+
+    // Athlete reads assessment and sees coach feedback
+    const athleteGetWithFeedback = await t.app.inject({
+      method: "GET",
+      url: `/api/v1/assessments/${created.id}`,
+      headers: { cookie: athleteCookie },
+    });
+    expect(athleteGetWithFeedback.json().coachFeedback).toHaveLength(1);
+    expect(athleteGetWithFeedback.json().coachFeedback[0].notes).toContain("Solid eccentric tempo");
+
+    // Athlete updates status to ACCEPTED
+    const patchRes = await t.app.inject({
+      method: "PATCH",
+      url: `/api/v1/assessments/${created.id}`,
+      headers: { cookie: athleteCookie },
+      body: { status: "ACCEPTED" },
+    });
+    expect(patchRes.statusCode).toBe(200);
+    expect(patchRes.json().status).toBe("ACCEPTED");
+
+    // Athlete revokes share grant
+    const revokeRes = await t.app.inject({
+      method: "DELETE",
+      url: `/api/v1/assessments/${created.id}/grants/${grant.id}`,
+      headers: { cookie: athleteCookie },
+    });
+    expect(revokeRes.statusCode).toBe(204);
+
+    // Immediately after revocation, coach gets 404 (ADR-0010 negative authorization)
+    const coachGetRevoked = await t.app.inject({
+      method: "GET",
+      url: `/api/v1/assessments/${created.id}`,
+      headers: { cookie: coachCookie },
+    });
+    expect(coachGetRevoked.statusCode).toBe(404);
+  });
 });

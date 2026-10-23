@@ -682,6 +682,44 @@ export const filmSavedSearches = pgTable(
   ],
 );
 
+/** Biomechanical assessment sharing grants (WP-2.8, Master Spec §4.5, ADR-0009). */
+export const assessmentShareGrants = pgTable(
+  "assessment_share_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id").notNull().references(() => movementAssessments.id, { onDelete: "cascade" }),
+    athleteId: uuid("athlete_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    granteeId: uuid("grantee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("COACH"), // COACH | TRAINER | HEALTH_PRO
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("assessment_share_grants_assessment_grantee_idx").on(t.assessmentId, t.granteeId),
+    index("assessment_share_grants_grantee_idx").on(t.granteeId),
+  ],
+);
+
+/** Coach feedback & drill prescriptions for movement assessments (WP-2.8, Master Spec §4.6). */
+export const assessmentCoachFeedback = pgTable(
+  "assessment_coach_feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id").notNull().references(() => movementAssessments.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    authorRole: text("author_role").notNull().default("COACH"),
+    notes: text("notes").notNull(),
+    cues: jsonb("cues").$type<string[]>().notNull().default([]),
+    suggestedDrillId: uuid("suggested_drill_id").references(() => practiceDrills.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("assessment_coach_feedback_assessment_idx").on(t.assessmentId),
+  ],
+);
+
+
 
 
 
