@@ -12,6 +12,10 @@ import {
   createDrill,
   listDrills,
 } from "./service.js";
+import {
+  exportPracticePrintHtmlById,
+  renderPracticePrintHtml,
+} from "./export.js";
 
 const me = (req: FastifyRequest) => req.user!.id;
 const authed = { config: { access: "authenticated" as const } };
@@ -128,5 +132,22 @@ export function registerPracticeRoutes(app: FastifyInstance, db: Db) {
     const body = createDrillBody.parse(req.body);
     const drill = await createDrill(db, me(req), teamIdOf(req), body);
     return reply.status(201).send(drill);
+  });
+
+  // 9. Export practice session as Print-ready HTML Sheet
+  app.get("/api/v1/practices/:id/export/print", authed, async (req, reply) => {
+    const html = await exportPracticePrintHtmlById(db, me(req), idOf(req));
+    return reply.header("Content-Type", "text/html; charset=utf-8").send(html);
+  });
+
+  // 10. Ad-hoc practice session print HTML generation from payload
+  app.post("/api/v1/practices/export/print", authed, async (req, reply) => {
+    const body = createPracticeBody.parse(req.body);
+    const totalDurationMins = body.blocks.reduce((sum, b) => sum + b.durationMins, 0);
+    const html = renderPracticePrintHtml({
+      ...body,
+      totalDurationMins,
+    });
+    return reply.header("Content-Type", "text/html; charset=utf-8").send(html);
   });
 }
