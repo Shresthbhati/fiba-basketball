@@ -4,6 +4,7 @@ import { z } from "zod";
 import { can } from "../authz/service.js";
 import type { Db } from "../db/index.js";
 import { AuthError } from "../identity/service.js";
+import { getCompetitionEmbedSummary } from "./embed.js";
 import {
   applyDelay, competitionStandings, createCompetition, listCompetitions, createTeam, generateSchedule,
   getCommandCenter, getCompetitionOfficials, getMatch, getTeam, listMatches, listTeams,
@@ -134,4 +135,24 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
     recordResult(db, compId(req), req.user!.id, result.parse(req.body)),
   );
   app.post("/api/v1/matches/:id/lock", { config: { access: score } }, async (req) => lockMatch(db, compId(req)));
+
+  // Public Embeddable Tournament Endpoints (Spec §8.5, §15.2)
+  app.get("/api/v1/embed/competitions/:id/summary", { config: { access: "public" } }, async (req) => {
+    return getCompetitionEmbedSummary(db, compId(req));
+  });
+
+  app.get("/api/v1/embed/competitions/:id/standings", { config: { access: "public" } }, async (req) => {
+    const summary = await getCompetitionEmbedSummary(db, compId(req));
+    return { competition: summary.competition, standings: summary.standings, stats: summary.stats };
+  });
+
+  app.get("/api/v1/embed/competitions/:id/bracket", { config: { access: "public" } }, async (req) => {
+    const summary = await getCompetitionEmbedSummary(db, compId(req));
+    return { competition: summary.competition, bracket: summary.bracket, stats: summary.stats };
+  });
+
+  app.get("/api/v1/embed/competitions/:id/schedule", { config: { access: "public" } }, async (req) => {
+    const summary = await getCompetitionEmbedSummary(db, compId(req));
+    return { competition: summary.competition, schedule: summary.schedule, stats: summary.stats };
+  });
 }
