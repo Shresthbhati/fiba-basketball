@@ -1365,3 +1365,64 @@ export const courtMaintenanceLogs = pgTable(
     index("idx_maintenance_performed").on(t.courtId, t.performedAt),
   ],
 );
+
+
+/** Minor Emergency Contacts & Medical Info (Spec §14.1, §23.4). */
+export const minorEmergencyContacts = pgTable(
+  "minor_emergency_contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    minorId: uuid("minor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    primaryContactName: text("primary_contact_name").notNull(),
+    primaryContactPhone: text("primary_contact_phone").notNull(),
+    primaryContactRelationship: varchar("primary_contact_relationship", { length: 40 }).notNull().default("PARENT"),
+    secondaryContactName: text("secondary_contact_name"),
+    secondaryContactPhone: text("secondary_contact_phone"),
+    secondaryContactRelationship: varchar("secondary_contact_relationship", { length: 40 }),
+    medicalNotes: text("medical_notes"),
+    updatedById: uuid("updated_by_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_emergency_minor").on(t.minorId),
+    index("idx_emergency_minor").on(t.minorId),
+  ],
+);
+
+/** Guardian Safety Settings & Lock Status (Spec §14.1, §23.4). */
+export const guardianSafetySettings = pgTable(
+  "guardian_safety_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    guardianId: uuid("guardian_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    minorId: uuid("minor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    notifyOnPickupJoin: boolean("notify_on_pickup_join").notNull().default(true),
+    notifyOnTournamentRoster: boolean("notify_on_tournament_roster").notNull().default(true),
+    notifyOnCheckin: boolean("notify_on_checkin").notNull().default(true),
+    safetyLockActive: boolean("safety_lock_active").notNull().default(false),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_safety_guardian_minor").on(t.guardianId, t.minorId),
+    index("idx_safety_guardian").on(t.guardianId),
+    index("idx_safety_minor").on(t.minorId),
+  ],
+);
+
+/** Minor Activity Check-Ins & Parent Acknowledgements (Spec §14.1, §23.4). */
+export const minorActivityCheckins = pgTable(
+  "minor_activity_checkins",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    minorId: uuid("minor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    activityType: varchar("activity_type", { length: 30 }).notNull(), // PICKUP_GAME | TOURNAMENT_MATCH | TEAM_PRACTICE
+    activityId: text("activity_id").notNull(),
+    courtName: text("court_name").notNull(),
+    checkedInAt: timestamp("checked_in_at", { withTimezone: true }).notNull().defaultNow(),
+    parentAcknowledgedAt: timestamp("parent_acknowledged_at", { withTimezone: true }),
+    parentAcknowledgedBy: uuid("parent_acknowledged_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    index("idx_minor_checkins").on(t.minorId),
+  ],
+);
