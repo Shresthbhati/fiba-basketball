@@ -6,6 +6,7 @@ import { BoxScore } from "./box-score";
 import { CommandCenterPanel } from "./command-center-panel";
 import { formatLabel, stateLabel, statusLabel, type CompetitionDetail, type MatchRow, type StandingRow } from "./competition-types";
 import { TournamentBracket } from "./tournament-bracket";
+import { CompetitionEmbedModal } from "./competition-embed-modal";
 
 const roundName = (round: number, last: number, knockout: boolean) =>
   !knockout ? `Round ${round}` : round === last ? "Final" : round === last - 1 ? "Semi-finals" : `Round ${round}`;
@@ -84,6 +85,7 @@ export function CompetitionPanel({ id }: { id: string }) {
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [openCC, setOpenCC] = useState(false);
+  const [showEmbedModal, setShowEmbedModal] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -138,6 +140,18 @@ export function CompetitionPanel({ id }: { id: string }) {
     <div style={{ display: "grid", gap: 16, maxWidth: 640 }}>
       <div>
         <h1 style={{ marginBottom: 0 }}>{comp.name}</h1>
+        {comp.status !== "DRAFT" && (
+          <div style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setShowEmbedModal(true)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              🌐 Embed Widget
+            </button>
+          </div>
+        )}
         <div style={{ color: "var(--muted)" }}>{formatLabel[comp.format]} · {statusLabel[comp.status]}</div>
       </div>
       {error && <p role="alert" style={{ color: "#ff6b6b" }}>{error}</p>}
@@ -241,6 +255,13 @@ export function CompetitionPanel({ id }: { id: string }) {
             </table>
           </div>
           <small style={{ color: "var(--muted)" }}>Win = 2 points, loss = 1, forfeit loss = 0.</small>
+      {showEmbedModal && comp && (
+        <CompetitionEmbedModal
+          competitionId={id}
+          competitionName={comp.name}
+          onClose={() => setShowEmbedModal(false)}
+        />
+      )}
         </section>
       )}
     </div>
