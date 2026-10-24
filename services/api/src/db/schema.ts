@@ -1137,6 +1137,55 @@ export const scoutShortlistMembers = pgTable(
   ],
 );
 
+/** Professional 20-80 Scale Talent Evaluation Cards (WP-8.4, Master Spec §13.1–§13.4, §14.2, §23). */
+export const scoutEvaluations = pgTable(
+  "scout_evaluations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    scoutId: uuid("scout_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    athleteId: uuid("athlete_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    gameContext: varchar("game_context", { length: 40 }).notNull().default("LIVE_GAME"),
+    matchId: uuid("match_id").references(() => matches.id, { onDelete: "set null" }),
+    evalDate: timestamp("eval_date", { withTimezone: true }).notNull().defaultNow(),
+    projectedRole: varchar("projected_role", { length: 50 }).notNull().default("VERSATILE_ROTATION"),
+    playerComparison: text("player_comparison"),
+    // 20-80 Competencies (Present & Future projection)
+    shootingPresent: integer("shooting_present").notNull().default(50),
+    shootingFuture: integer("shooting_future").notNull().default(50),
+    finishingPresent: integer("finishing_present").notNull().default(50),
+    finishingFuture: integer("finishing_future").notNull().default(50),
+    playmakingPresent: integer("playmaking_present").notNull().default(50),
+    playmakingFuture: integer("playmaking_future").notNull().default(50),
+    perimeterDefensePresent: integer("perimeter_defense_present").notNull().default(50),
+    perimeterDefenseFuture: integer("perimeter_defense_future").notNull().default(50),
+    interiorDefensePresent: integer("interior_defense_present").notNull().default(50),
+    interiorDefenseFuture: integer("interior_defense_future").notNull().default(50),
+    reboundingPresent: integer("rebounding_present").notNull().default(50),
+    reboundingFuture: integer("rebounding_future").notNull().default(50),
+    athleticismPresent: integer("athleticism_present").notNull().default(50),
+    athleticismFuture: integer("athleticism_future").notNull().default(50),
+    basketballIqPresent: integer("basketball_iq_present").notNull().default(50),
+    basketballIqFuture: integer("basketball_iq_future").notNull().default(50),
+    overallPresent: integer("overall_present").notNull().default(50),
+    overallFuture: integer("overall_future").notNull().default(50),
+    // Qualitative narrative
+    strengthsSummary: text("strengths_summary").notNull(),
+    weaknessesSummary: text("weaknesses_summary").notNull(),
+    swingSkills: text("swing_skills"),
+    intangiblesNotes: text("intangibles_notes"),
+    // Visibility & Sharing
+    isSharedWithOrg: boolean("is_shared_with_org").notNull().default(false),
+    organization: varchar("organization", { length: 120 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("scout_evaluations_scout_idx").on(t.scoutId),
+    index("scout_evaluations_athlete_idx").on(t.athleteId),
+    index("scout_evaluations_org_idx").on(t.organization),
+  ],
+);
+
 /** Host Reliability Ratings & Post-Run Feedback (WP-5.3, Master Spec §8.2, §11.4). */
 export const hostReviews = pgTable(
   "host_reviews",
