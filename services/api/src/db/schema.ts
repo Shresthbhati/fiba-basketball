@@ -1141,3 +1141,74 @@ export const courtActivityCheckIns = pgTable(
     index("court_activity_check_ins_user_idx").on(t.userId),
   ],
 );
+
+/** Free Agent Listings for Pickup-to-Team Pathway (WP-5.5, Master Spec §8.4, §11.4). */
+export const freeAgentListings = pgTable(
+  "free_agent_listings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    city: varchar("city", { length: 100 }).notNull(),
+    primaryPosition: varchar("primary_position", { length: 10 }).notNull(),
+    secondaryPositions: jsonb("secondary_positions").$type<string[]>().notNull().default([]),
+    skillLevel: varchar("skill_level", { length: 30 }).notNull().default("OPEN"),
+    experienceYears: integer("experience_years").notNull().default(0),
+    availability: varchar("availability", { length: 50 }).notNull().default("ANYTIME"),
+    bio: text("bio"),
+    status: varchar("status", { length: 20 }).notNull().default("ACTIVE"), // ACTIVE | MATCHED | INACTIVE
+    linkedCommunityId: uuid("linked_community_id").references(() => communities.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_free_agents_city").on(t.city),
+    index("idx_free_agents_position").on(t.primaryPosition),
+    index("idx_free_agents_status").on(t.status),
+    index("idx_free_agents_user").on(t.userId),
+  ],
+);
+
+/** Team Invitations for Free Agents & Pickup Ballers (WP-5.5, Master Spec §8.4). */
+export const teamInvitations = pgTable(
+  "team_invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    inviterId: uuid("inviter_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: varchar("role", { length: 20 }).notNull().default("PLAYER"),
+    message: text("message"),
+    status: varchar("status", { length: 20 }).notNull().default("PENDING"), // PENDING | ACCEPTED | DECLINED | CANCELLED
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("idx_team_invitations_team").on(t.teamId),
+    index("idx_team_invitations_user").on(t.userId),
+    index("idx_team_invitations_status").on(t.status),
+  ],
+);
+
+/** Competition Draft Pool for Unsigned Players (WP-5.5, Master Spec §8.4, §11.4). */
+export const competitionDraftPool = pgTable(
+  "competition_draft_pool",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    primaryPosition: varchar("primary_position", { length: 10 }).notNull(),
+    skillLevel: varchar("skill_level", { length: 30 }).notNull().default("OPEN"),
+    draftStatus: varchar("draft_status", { length: 20 }).notNull().default("UNDRAFTED"), // UNDRAFTED | DRAFTED | WITHDRAWN
+    draftedByTeamId: uuid("drafted_by_team_id").references(() => teams.id, { onDelete: "set null" }),
+    draftRound: integer("draft_round"),
+    draftPick: integer("draft_pick"),
+    registeredAt: timestamp("registered_at", { withTimezone: true }).notNull().defaultNow(),
+    draftedAt: timestamp("drafted_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("uq_draft_pool_comp_user").on(t.competitionId, t.userId),
+    index("idx_draft_pool_comp").on(t.competitionId),
+    index("idx_draft_pool_user").on(t.userId),
+    index("idx_draft_pool_status").on(t.draftStatus),
+  ],
+);
