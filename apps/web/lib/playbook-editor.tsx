@@ -12,6 +12,7 @@ import {
   type CourtPoint,
 } from "@courtiq/court-renderer";
 import { interpolateKeyframes } from "./play-animator";
+import { PlaybookExportModal } from "./playbook-export-modal";
 
 export interface PlaybookEditorProps {
   initialPlay?: TacticalPlay;
@@ -94,6 +95,7 @@ export const PlaybookEditor: React.FC<PlaybookEditorProps> = ({
   const [animProgress, setAnimProgress] = useState<number>(0);
   const [playSpeed, setPlaySpeed] = useState<number>(1.0);
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
 
   // Active Tool state
   const [tool, setTool] = useState<EditorTool>("select");
@@ -318,6 +320,14 @@ export const PlaybookEditor: React.FC<PlaybookEditorProps> = ({
         </div>
 
         {/* Export & Save controls */}
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => setIsExportModalOpen(true)}
+          style={{ fontSize: "0.85rem", padding: "6px 12px" }}
+        >
+          Export Vector / PDF
+        </button>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
@@ -715,6 +725,7 @@ export const PlaybookEditor: React.FC<PlaybookEditorProps> = ({
           </div>
         </div>
       )}
+      <PlaybookExportModal open={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} play={play} activeStepIdx={activeStepIdx} />
     </div>
   );
 };
