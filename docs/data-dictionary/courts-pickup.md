@@ -13,4 +13,18 @@ API: `GET /api/v1/courts/nearby?lat&lng&radius_m&indoor`, `GET|POST /courts`, `P
 
 Rules: waitlist promotes in join order when a confirmed player cancels; check-in opens 30 min before start; roster names visible only to people in the game;
 under-18 accounts cannot host or join public games until guardian consent exists.
-Not built yet: invite-only/private games, recurring runs, live SSE capacity updates, activity history aggregates, notifications.
+
+## Facility Operations & Court Reservation OS (Spec §8.3, §23.1)
+- `facility_claims`: `court_id`, `operator_id`, `business_name`, `contact_email`, `contact_phone`, `status` (`PENDING | APPROVED | REJECTED`), `verified_at`. On approval, court transitions to `FACILITY_VERIFIED` and operator receives `VENUE_MANAGER` role.
+- `court_operating_hours`: `court_id`, `day_of_week` (0–6), `open_time`, `close_time`, `slot_duration_minutes`, `hourly_rate_cents`, `currency`, `is_closed`. Configurable by venue manager, public read.
+- `court_reservations`: `court_id`, `booked_by_id`, `start_time`, `end_time`, `purpose` (`LEAGUE_MATCH | TEAM_PRACTICE | PICKUP_RUN | TRAINING | COMMUNITY_EVENT | OTHER`), `status` (`CONFIRMED | CANCELLED`), `total_price_cents`, `notes`. Strict time overlap collision prevention; privacy filters conceal booker identity and notes for public queries while showing full details to manager.
+- `court_maintenance_logs`: `court_id`, `logged_by_id`, `category` (`SURFACE_RESURFACING | RIM_REPLACEMENT | NET_REPLACEMENT | BACKBOARD_INSPECTION | LIGHTING_REPAIR | COURT_STRIPING | GENERAL_CLEANING | SAFETY_AUDIT`), `description`, `severity` (`ROUTINE | RECOMMENDED | URGENT_SAFETY_HAZARD`), `cost_cents`, `performed_at`, `next_inspection_due`. Publicly readable for player court safety transparency.
+- Facility Analytics: computes 14-day utilization rate (% of operating hours booked), revenue totals, maintenance spend, urgent hazard flags, and purpose breakdown.
+- API endpoints:
+  - `POST /api/v1/courts/:id/claims` (submit claim)
+  - `GET /api/v1/courts/:id/facility-status` (claim status & manager badge)
+  - `GET|PUT /api/v1/courts/:id/operating-hours` (weekly schedule & slot pricing)
+  - `GET|POST /api/v1/courts/:id/reservations` (privacy-preserved slot listing / booking)
+  - `POST /api/v1/reservations/:id/cancel` (cancel reservation)
+  - `GET|POST /api/v1/courts/:id/maintenance` (safety inspection & repair logs)
+  - `GET /api/v1/courts/:id/facility-analytics` (venue manager utilization metrics)
