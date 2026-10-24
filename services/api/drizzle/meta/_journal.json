@@ -232,6 +232,13 @@
       "when": 1792748000000,
       "tag": "0032_communities_host_reliability_and_activity",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792749000000,
+      "tag": "0033_free_agents_and_draft_pool",
+      "breakpoints": true
     }
   ]
 }
