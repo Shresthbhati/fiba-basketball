@@ -1,5 +1,5 @@
 export type Game = {
-  id: string; title: string; courtId: string; startsAt: string; endsAt: string; capacity: number; skillBand: string | null;
+  id: string; hostId?: string; title: string; courtId: string; startsAt: string; endsAt: string; capacity: number; skillBand: string | null;
   confirmedCount: number; spotsLeft: number; phase: "OPEN" | "FULL" | "IN_PROGRESS" | "UNCONFIRMED" | "COMPLETED" | "CANCELLED";
   courtName?: string; distanceM?: number;
 };

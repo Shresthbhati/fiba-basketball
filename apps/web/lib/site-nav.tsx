@@ -23,6 +23,7 @@ export function SiteNav() {
       <Link href="/"><strong>COURT IQ</strong></Link>
       <Link href="/courts">Courts</Link>
       <Link href="/pickup">Pickup</Link>
+      <Link href="/communities">Communities</Link>
       <Link href="/train">Train</Link>
       <Link href="/competitions">Competitions</Link>
       <Link href="/teams">Teams</Link>

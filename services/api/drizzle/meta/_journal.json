@@ -225,6 +225,13 @@
       "when": 1792747000000,
       "tag": "0031_opportunities_and_scouts",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792748000000,
+      "tag": "0032_communities_host_reliability_and_activity",
+      "breakpoints": true
     }
   ]
 }
