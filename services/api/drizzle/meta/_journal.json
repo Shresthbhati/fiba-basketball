@@ -260,6 +260,13 @@
       "when": 1792752000000,
       "tag": "0036_guardian_portal_and_youth_safety",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792753000000,
+      "tag": "0037_match_protests_and_dispute_tribunal",
+      "breakpoints": true
     }
   ]
 }
