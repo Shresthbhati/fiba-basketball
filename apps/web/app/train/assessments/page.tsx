@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
+import { CameraCaptureStudio } from "../../../lib/camera-capture-studio";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { SourceBadge } from "@courtiq/design-system";
@@ -60,6 +61,7 @@ const SAMPLE_ASSESSMENTS: DetailedAssessment[] = [
 ];
 
 export default function AssessmentsPage() {
+  const [showStudio, setShowStudio] = useState(false);
   const assessmentsQuery = useQuery({
     queryKey: ["assessments"],
     queryFn: () => api<{ items: DetailedAssessment[] }>("/assessments").catch(() => ({ items: [] })),
@@ -79,22 +81,46 @@ export default function AssessmentsPage() {
           </p>
         </div>
 
-        <Link
-          href="/train"
-          style={{
-            padding: "8px 16px",
-            borderRadius: 6,
-            border: "1px solid #d1d5db",
-            background: "#ffffff",
-            fontSize: 13,
-            fontWeight: 600,
-            textDecoration: "none",
-            color: "#1e3a8a",
-          }}
-        >
-          ← Training OS
-        </Link>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => setShowStudio((prev) => !prev)}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 6,
+              background: "#ea580c",
+              color: "#ffffff",
+              fontSize: 13,
+              fontWeight: 700,
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            {showStudio ? "✕ Close Studio" : "● Launch Camera Studio"}
+          </button>
+          <Link
+            href="/train"
+            style={{
+              padding: "8px 16px",
+              borderRadius: 6,
+              border: "1px solid #d1d5db",
+              background: "#ffffff",
+              fontSize: 13,
+              fontWeight: 600,
+              textDecoration: "none",
+              color: "#1e3a8a",
+            }}
+          >
+            ← Training OS
+          </Link>
+        </div>
       </div>
+
+      {showStudio && (
+        <div style={{ marginBottom: 24 }}>
+          <CameraCaptureStudio onClose={() => setShowStudio(false)} />
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {assessments.map((item) => (

@@ -267,6 +267,13 @@
       "when": 1792753000000,
       "tag": "0037_match_protests_and_dispute_tribunal",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792754000000,
+      "tag": "0038_multicam_player_lab_and_shooting_mechanics",
+      "breakpoints": true
     }
   ]
 }

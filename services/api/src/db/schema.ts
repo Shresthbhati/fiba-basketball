@@ -515,6 +515,40 @@ export const movementAssessments = pgTable(
   (t) => [index("movement_assessments_user_idx").on(t.userId, t.createdAt)],
 );
 
+/** Multi-Angle Synchronized Video Streams for Biomechanical Assessments (Spec §4.1, §6.3, §9.2). */
+export const assessmentCameraStreams = pgTable(
+  "assessment_camera_streams",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assessmentId: uuid("assessment_id").notNull().references(() => movementAssessments.id, { onDelete: "cascade" }),
+    cameraLabel: varchar("camera_label", { length: 40 }).notNull(), // PRIMARY_SAGITTAL | SECONDARY_FRONTAL | ELEVATED_REAR | BASELINE_WIDE
+    videoUrl: text("video_url").notNull(),
+    syncOffsetMs: integer("sync_offset_ms").notNull().default(0),
+    resolution: varchar("resolution", { length: 20 }).default("1080p"),
+    fps: integer("fps").default(60),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    calibratedDistanceM: numeric("calibrated_distance_m", { precision: 4, scale: 2 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("assessment_camera_streams_assessment_idx").on(t.assessmentId)],
+);
+
+/** Normative Shooting Mechanics Benchmarks by Tier (Spec §4.1, §9.2). */
+export const shootingMechanicsBenchmarks = pgTable(
+  "shooting_mechanics_benchmarks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tier: varchar("tier", { length: 30 }).notNull(), // PRO | COLLEGIATE | VARSITY | YOUTH
+    minReleaseAngleDeg: numeric("min_release_angle_deg", { precision: 4, scale: 1 }).notNull(),
+    maxReleaseAngleDeg: numeric("max_release_angle_deg", { precision: 4, scale: 1 }).notNull(),
+    minReleaseTimeS: numeric("min_release_time_s", { precision: 4, scale: 2 }).notNull(),
+    maxReleaseTimeS: numeric("max_release_time_s", { precision: 4, scale: 2 }).notNull(),
+    maxElbowFlareDeg: numeric("max_elbow_flare_deg", { precision: 4, scale: 1 }).notNull(),
+    targetEntryAngleDeg: numeric("target_entry_angle_deg", { precision: 4, scale: 1 }).notNull().default("45.0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
 /** Tactical Plays & Diagrams (Pillar 4, Master Spec §7, ADR-0007). */
 export const tacticalPlays = pgTable(
   "tactical_plays",
