@@ -218,6 +218,13 @@
       "when": 1792746000000,
       "tag": "0030_training_programs",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792747000000,
+      "tag": "0031_opportunities_and_scouts",
+      "breakpoints": true
     }
   ]
 }

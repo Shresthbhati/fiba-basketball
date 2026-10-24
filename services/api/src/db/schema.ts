@@ -934,3 +934,130 @@ export const programEnrollments = pgTable(
 
 
 
+
+/** Basketball Opportunities & Tryout Board (WP-8.3, Master Spec §11.2). */
+export const opportunities = pgTable(
+  "opportunities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: varchar("title", { length: 160 }).notNull(),
+    slug: varchar("slug", { length: 180 }).notNull(),
+    type: varchar("type", { length: 40 }).notNull(), // TEAM_TRYOUT | OPEN_RUN | SHOWCASE_CAMP | COLLEGE_RECRUITING_COMBINE | PRO_CONTRACT_TRIAL
+    organizationName: varchar("organization_name", { length: 120 }).notNull(),
+    organizationId: uuid("organization_id"),
+    creatorId: uuid("creator_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    description: text("description").notNull(),
+    requirements: text("requirements"),
+    verificationStatus: varchar("verification_status", { length: 32 }).notNull().default("COMMUNITY"), // COMMUNITY | VERIFIED | FEATURED | REJECTED | EXPIRED
+    locationName: varchar("location_name", { length: 120 }).notNull(),
+    address: varchar("address", { length: 255 }),
+    city: varchar("city", { length: 100 }).notNull(),
+    country: varchar("country", { length: 64 }).notNull().default("USA"),
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
+    startDate: timestamp("start_date", { withTimezone: true }),
+    endDate: timestamp("end_date", { withTimezone: true }),
+    applicationDeadline: timestamp("application_deadline", { withTimezone: true }),
+    costCents: integer("cost_cents").notNull().default(0),
+    currency: varchar("currency", { length: 3 }).notNull().default("USD"),
+    contactEmail: varchar("contact_email", { length: 255 }).notNull(),
+    contactPhone: varchar("contact_phone", { length: 64 }),
+    ageGroup: varchar("age_group", { length: 32 }).notNull().default("OPEN"), // U14 | U16 | U18 | U20 | SENIOR | OPEN
+    minAge: integer("min_age"),
+    maxAge: integer("max_age"),
+    gender: varchar("gender", { length: 16 }).notNull().default("COED"), // MEN | WOMEN | COED
+    positions: jsonb("positions").$type<string[]>().notNull().default(["ALL"]),
+    skillLevel: varchar("skill_level", { length: 32 }).notNull().default("OPEN"), // RECREATIONAL | INTERMEDIATE | ADVANCED | ELITE | COLLEGIATE_PRO
+    capacity: integer("capacity"),
+    isPublic: boolean("is_public").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("opportunities_type_idx").on(t.type),
+    index("opportunities_city_idx").on(t.city),
+    index("opportunities_verification_idx").on(t.verificationStatus),
+    index("opportunities_creator_idx").on(t.creatorId),
+  ],
+);
+
+/** Athlete Applications for Opportunities & Tryouts (WP-8.3, Master Spec §11.2, §14.1). */
+export const opportunityApplications = pgTable(
+  "opportunity_applications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    opportunityId: uuid("opportunity_id").notNull().references(() => opportunities.id, { onDelete: "cascade" }),
+    athleteId: uuid("athlete_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 32 }).notNull().default("SUBMITTED"), // SUBMITTED | UNDER_REVIEW | INVITED | WAITLISTED | DECLINED
+    passportToken: varchar("passport_token", { length: 100 }), // Optional link to career passport grant (WP-8.1)
+    primaryPosition: varchar("primary_position", { length: 8 }).notNull().default("G"),
+    heightCm: integer("height_cm"),
+    weightKg: integer("weight_kg"),
+    graduationYear: integer("graduation_year"),
+    currentTeam: varchar("current_team", { length: 120 }),
+    notes: text("notes"),
+    guardianConsentGranted: boolean("guardian_consent_granted").notNull().default(false), // Required for minors <18
+    guardianName: varchar("guardian_name", { length: 120 }),
+    guardianEmail: varchar("guardian_email", { length: 255 }),
+    reviewerNotes: text("reviewer_notes"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewedByUserId: uuid("reviewed_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("opportunity_applications_opp_idx").on(t.opportunityId, t.status),
+    index("opportunity_applications_athlete_idx").on(t.athleteId),
+  ],
+);
+
+/** Scout / Recruiter Profiles (WP-8.4, Master Spec §11.3). */
+export const scoutProfiles = pgTable(
+  "scout_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+    organization: varchar("organization", { length: 120 }).notNull(),
+    roleTitle: varchar("role_title", { length: 100 }).notNull(),
+    credentialsVerified: boolean("credentials_verified").notNull().default(false),
+    verifiedByUserId: uuid("verified_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    active: boolean("active").notNull().default(true),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("scout_profiles_user_idx").on(t.userId)],
+);
+
+/** Scout Talent Shortlists (WP-8.4, Master Spec §11.4). Private to the scout (ADR-0010). */
+export const scoutShortlists = pgTable(
+  "scout_shortlists",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    scoutId: uuid("scout_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    description: text("description"),
+    isSharedWithOrg: boolean("is_shared_with_org").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("scout_shortlists_scout_idx").on(t.scoutId)],
+);
+
+/** Athletes added to a Scout Shortlist (WP-8.4). */
+export const scoutShortlistMembers = pgTable(
+  "scout_shortlist_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    shortlistId: uuid("shortlist_id").notNull().references(() => scoutShortlists.id, { onDelete: "cascade" }),
+    athleteId: uuid("athlete_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    evaluationTier: varchar("evaluation_tier", { length: 32 }).notNull().default("WATCHLIST"), // WATCHLIST | HIGH_PRIORITY | CONTACTED | OFFERED | COMMITTED | PASSED
+    scoutNotes: text("scout_notes"),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("scout_shortlist_members_list_idx").on(t.shortlistId),
+    index("scout_shortlist_members_athlete_idx").on(t.athleteId),
+  ],
+);
