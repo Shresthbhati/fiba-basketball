@@ -20,7 +20,7 @@ async function confirmedCount(db: Db, gameId: string) {
 }
 
 const summary = (g: Game, n: number, now: Date) => ({
-  id: g.id, title: g.title, courtId: g.courtId, startsAt: g.startsAt, endsAt: g.endsAt, capacity: g.capacity,
+  id: g.id, hostId: g.hostId, title: g.title, courtId: g.courtId, startsAt: g.startsAt, endsAt: g.endsAt, capacity: g.capacity,
   skillBand: g.skillBand, confirmedCount: n, spotsLeft: Math.max(0, g.capacity - n),
   phase: phaseOf({ ...g, status: g.status as StoredStatus }, n, now), hostConfirmedAt: g.hostConfirmedAt, seriesId: g.seriesId,
 });
