@@ -1212,3 +1212,70 @@ export const competitionDraftPool = pgTable(
     index("idx_draft_pool_status").on(t.draftStatus),
   ],
 );
+
+
+/** Match Pre-game Safety & Protocol Checklists (Spec §23.2, §16.4). */
+export const matchPregameChecklists = pgTable(
+  "match_pregame_checklists",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+    refereeId: uuid("referee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    courtSurfaceSafe: boolean("court_surface_safe").notNull().default(false),
+    perimeterRunoffClear: boolean("perimeter_runoff_clear").notNull().default(false),
+    gameBallPressureChecked: boolean("game_ball_pressure_checked").notNull().default(false),
+    gameClockTested: boolean("game_clock_tested").notNull().default(false),
+    shotClockTested: boolean("shot_clock_tested").notNull().default(false),
+    jerseyContrastVerified: boolean("jersey_contrast_verified").notNull().default(false),
+    tableCrewConfirmed: boolean("table_crew_confirmed").notNull().default(false),
+    notes: text("notes"),
+    completedAt: timestamp("completed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_pregame_match_ref").on(t.matchId, t.refereeId),
+    index("idx_pregame_match").on(t.matchId),
+    index("idx_pregame_ref").on(t.refereeId),
+  ],
+);
+
+/** Match Disciplinary & Incident Reports (Spec §23.2, §16.4). */
+export const matchIncidentReports = pgTable(
+  "match_incident_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+    reporterId: uuid("reporter_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    incidentType: varchar("incident_type", { length: 30 }).notNull(), // TECHNICAL_FOUL | UNSPORTSMANLIKE_FOUL | DISQUALIFYING_FOUL | EJECTION | PROTEST | DELAY_INCIDENT
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "set null" }),
+    playerId: uuid("player_id").references(() => users.id, { onDelete: "set null" }),
+    period: integer("period"),
+    gameClockTime: varchar("game_clock_time", { length: 10 }),
+    description: text("description").notNull(),
+    ruleReference: varchar("rule_reference", { length: 50 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_incidents_match").on(t.matchId),
+    index("idx_incidents_reporter").on(t.reporterId),
+  ],
+);
+
+/** Match Official Sign-offs & Lock Authorization (Spec §23.2, §16.4). */
+export const matchOfficialSignoffs = pgTable(
+  "match_official_signoffs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+    refereeId: uuid("referee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    isCrewChief: boolean("is_crew_chief").notNull().default(false),
+    finalScoreVerified: boolean("final_score_verified").notNull().default(true),
+    scorebookAudited: boolean("scorebook_audited").notNull().default(true),
+    refereeNotes: text("referee_notes"),
+    signedAt: timestamp("signed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_signoff_match_ref").on(t.matchId, t.refereeId),
+    index("idx_signoffs_match").on(t.matchId),
+    index("idx_signoffs_ref").on(t.refereeId),
+  ],
+);
