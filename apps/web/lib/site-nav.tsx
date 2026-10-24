@@ -33,6 +33,7 @@ export function SiteNav() {
       <Link href="/practices">Practices</Link>
       <Link href="/assignments">Assignments</Link>
       <Link href="/coach">Coach</Link>
+      <Link href="/referee">Referee</Link>
       <Link href="/opportunities">Opportunities</Link>
       <Link href="/scouts">Scouts</Link>
       <Link href="/train/readiness">Readiness</Link>

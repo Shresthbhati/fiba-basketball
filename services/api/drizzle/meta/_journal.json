@@ -239,6 +239,13 @@
       "when": 1792749000000,
       "tag": "0033_free_agents_and_draft_pool",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792750000000,
+      "tag": "0034_referee_workspace_and_signoff",
+      "breakpoints": true
     }
   ]
 }
