@@ -1426,3 +1426,50 @@ export const minorActivityCheckins = pgTable(
     index("idx_minor_checkins").on(t.minorId),
   ],
 );
+
+
+/** Match Protests & Formal Disputes (Spec §16.5, FIBA Rule C). */
+export const matchProtests = pgTable(
+  "match_protests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+    filingTeamId: uuid("filing_team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    filedById: uuid("filed_by_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    protestType: varchar("protest_type", { length: 40 }).notNull(), // SCORE_DISCREPANCY | INELIGIBLE_PLAYER | REFEREE_RULE_MISAPPLICATION | CLOCK_OPERATOR_ERROR | OTHER
+    period: integer("period"),
+    gameClock: varchar("game_clock", { length: 10 }),
+    ruleCited: varchar("rule_cited", { length: 60 }),
+    description: text("description").notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("FILED"), // FILED | UNDER_REVIEW | UPHELD | DISMISSED
+    depositVerified: boolean("deposit_verified").notNull().default(true),
+    filedAt: timestamp("filed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_protests_match").on(t.matchId),
+    index("idx_protests_team").on(t.filingTeamId),
+    index("idx_protests_status").on(t.status),
+  ],
+);
+
+/** Protest Tribunal Rulings & Score Adjustments (Spec §16.5). */
+export const protestTribunalRulings = pgTable(
+  "protest_tribunal_rulings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    protestId: uuid("protest_id").notNull().references(() => matchProtests.id, { onDelete: "cascade" }),
+    reviewerId: uuid("reviewer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    refereeTestimony: text("referee_testimony"),
+    ruling: varchar("ruling", { length: 20 }).notNull(), // UPHELD | DISMISSED
+    remedyAction: varchar("remedy_action", { length: 30 }).notNull().default("NONE"), // NONE | SCORE_ADJUSTED | MATCH_FORFEITED | PERIOD_REPLAY_ORDERED
+    adjustedHomeScore: integer("adjusted_home_score"),
+    adjustedAwayScore: integer("adjusted_away_score"),
+    forfeitWinnerTeamId: uuid("forfeit_winner_team_id").references(() => teams.id, { onDelete: "set null" }),
+    rulingSummary: text("ruling_summary").notNull(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_protest_ruling").on(t.protestId),
+    index("idx_tribunal_protest").on(t.protestId),
+  ],
+);
