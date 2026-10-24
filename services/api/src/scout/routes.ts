@@ -3,12 +3,18 @@ import { z } from "zod";
 import type { Db } from "../db/index.js";
 import {
   addShortlistMember,
+  createScoutEvaluation,
   createShortlist,
+  deleteScoutEvaluation,
+  getAthleteConsensusEvaluation,
+  getScoutEvaluation,
   getScoutProfile,
   getShortlist,
+  listScoutEvaluationsForAthlete,
   listShortlists,
   removeShortlistMember,
   searchTalentPool,
+  updateScoutEvaluation,
   updateShortlistMember,
   upsertScoutProfile,
 } from "./service.js";
@@ -121,5 +127,89 @@ export function registerScoutRoutes(app: FastifyInstance, db: Db) {
     const { id, memberId } = memberParam.parse(req.params);
     await removeShortlistMember(db, id, memberId, me(req));
     return reply.status(204).send();
+  });
+
+  // -------------------------------------------------------------------------
+  // 20-80 Scale Talent Evaluation Cards (Spec §13.1–§13.4, §14.2)
+  // -------------------------------------------------------------------------
+
+  const gradeSchema = z.coerce.number().int().min(20).max(80);
+
+  const createEvaluationBody = z.object({
+    athleteId: z.string().uuid(),
+    gameContext: z.enum(["LIVE_GAME", "FILM_REVIEW", "COMBINE_WORKOUT", "TOURNAMENT", "PRACTICE"]).default("LIVE_GAME"),
+    matchId: z.string().uuid().optional(),
+    projectedRole: z.string().trim().max(50).default("VERSATILE_ROTATION"),
+    playerComparison: z.string().trim().max(100).optional(),
+    shootingPresent: gradeSchema.optional(),
+    shootingFuture: gradeSchema.optional(),
+    finishingPresent: gradeSchema.optional(),
+    finishingFuture: gradeSchema.optional(),
+    playmakingPresent: gradeSchema.optional(),
+    playmakingFuture: gradeSchema.optional(),
+    perimeterDefensePresent: gradeSchema.optional(),
+    perimeterDefenseFuture: gradeSchema.optional(),
+    interiorDefensePresent: gradeSchema.optional(),
+    interiorDefenseFuture: gradeSchema.optional(),
+    reboundingPresent: gradeSchema.optional(),
+    reboundingFuture: gradeSchema.optional(),
+    athleticismPresent: gradeSchema.optional(),
+    athleticismFuture: gradeSchema.optional(),
+    basketballIqPresent: gradeSchema.optional(),
+    basketballIqFuture: gradeSchema.optional(),
+    overallPresent: gradeSchema.optional(),
+    overallFuture: gradeSchema.optional(),
+    strengthsSummary: z.string().trim().min(3).max(2000),
+    weaknessesSummary: z.string().trim().min(3).max(2000),
+    swingSkills: z.string().trim().max(1000).optional(),
+    intangiblesNotes: z.string().trim().max(1000).optional(),
+    isSharedWithOrg: z.boolean().default(false),
+  });
+
+  const updateEvaluationBody = createEvaluationBody.partial();
+  const evalParam = z.object({ id: z.string().uuid() });
+  const athleteParam = z.object({ athleteId: z.string().uuid() });
+
+  // Create 20-80 evaluation card
+  app.post("/api/v1/scout/evaluations", authed, async (req, reply) => {
+    const body = createEvaluationBody.parse(req.body);
+    const evaluation = await createScoutEvaluation(db, me(req), body);
+    return reply.status(201).send(evaluation);
+  });
+
+  // Get evaluation card (negative authZ: 404 for unauthorized users per ADR-0010)
+  app.get("/api/v1/scout/evaluations/:id", authed, async (req) => {
+    const { id } = evalParam.parse(req.params);
+    const evaluation = await getScoutEvaluation(db, id, me(req));
+    return evaluation;
+  });
+
+  // Update evaluation card (author only)
+  app.patch("/api/v1/scout/evaluations/:id", authed, async (req) => {
+    const { id } = evalParam.parse(req.params);
+    const body = updateEvaluationBody.parse(req.body);
+    const updated = await updateScoutEvaluation(db, id, me(req), body);
+    return updated;
+  });
+
+  // Delete evaluation card (author only)
+  app.delete("/api/v1/scout/evaluations/:id", authed, async (req, reply) => {
+    const { id } = evalParam.parse(req.params);
+    await deleteScoutEvaluation(db, id, me(req));
+    return reply.status(204).send();
+  });
+
+  // List visible evaluations for an athlete
+  app.get("/api/v1/scout/athletes/:athleteId/evaluations", authed, async (req) => {
+    const { athleteId } = athleteParam.parse(req.params);
+    const items = await listScoutEvaluationsForAthlete(db, athleteId, me(req));
+    return { items };
+  });
+
+  // Get consensus evaluation for an athlete
+  app.get("/api/v1/scout/athletes/:athleteId/consensus", authed, async (req) => {
+    const { athleteId } = athleteParam.parse(req.params);
+    const consensus = await getAthleteConsensusEvaluation(db, athleteId, me(req));
+    return consensus;
   });
 }

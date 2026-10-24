@@ -274,6 +274,13 @@
       "when": 1792754000000,
       "tag": "0038_multicam_player_lab_and_shooting_mechanics",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792755000000,
+      "tag": "0039_scout_evaluations_and_consensus",
+      "breakpoints": true
     }
   ]
 }
