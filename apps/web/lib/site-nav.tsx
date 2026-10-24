@@ -35,6 +35,7 @@ export function SiteNav() {
       <Link href="/coach">Coach</Link>
       <Link href="/referee">Referee</Link>
       <Link href="/facility">Facility</Link>
+      <Link href="/guardian">Guardian</Link>
       <Link href="/opportunities">Opportunities</Link>
       <Link href="/scouts">Scouts</Link>
       <Link href="/train/readiness">Readiness</Link>

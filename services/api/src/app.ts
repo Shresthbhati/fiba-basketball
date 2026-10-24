@@ -37,6 +37,7 @@ import { registerCommunityRoutes } from "./community/routes.js";
 import { registerReliabilityRoutes } from "./pickup/reliability-routes.js";
 import { registerCourtActivityRoutes } from "./court/activity-routes.js";
 import { registerCourtFacilityRoutes } from "./court/facility-routes.js";
+import { registerGuardianRoutes } from "./consent/guardian-routes.js";
 import { registerFreeAgentRoutes } from "./competition/free-agent-routes.js";
 import { registerRefereeRoutes } from "./competition/referee-routes.js";
 import { LocalDiskStorage, type MediaStorage } from "./media/storage.js";
@@ -107,6 +108,7 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerFreeAgentRoutes(app, db);
   registerRefereeRoutes(app, db);
   registerCourtFacilityRoutes(app, db);
+  registerGuardianRoutes(app, db);
 
   // Liveness: the process is up. Readiness: it can reach the database (use this for load balancer checks).
   app.get("/health", async () => ({ status: "UP" }));
