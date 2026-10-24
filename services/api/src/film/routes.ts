@@ -11,6 +11,8 @@ import {
   myTeams, readGame, removeMember,
 } from "./service.js";
 import { linkMatch, matchesOfTeam, removeSync, setSync, timeline, unlinkMatch } from "./sync.js";
+import { autoAssembleHighlightReel, autoGenerateClips } from "./auto-clip.js";
+import { type EventType } from "../match/event-type.js";
 
 const VIDEO_TYPES = { "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" } as const;
 type VideoType = keyof typeof VIDEO_TYPES;
@@ -147,5 +149,38 @@ export function registerFilm(app: FastifyInstance, db: Db, storage: MediaStorage
     const p = clipParam.parse(req.params);
     await deleteClip(db, p.id, p.clipId);
     return reply.status(204).send();
+  });
+
+  // Automated Event-to-Clip Segmentation (Spec §6.2)
+  app.post("/api/v1/film/games/:id/auto-clip", { config: { access: manageGame } }, async (req, reply) => {
+    const id = idParam.parse(req.params).id;
+    const body = z.object({
+      category: z.enum(["THREE_POINTERS", "ALL_SCORING", "ASSISTS", "TURNOVERS", "REBOUNDS", "FOULS", "CUSTOM"]).optional(),
+      eventTypes: z.array(z.string()).optional() as z.ZodType<EventType[] | undefined>,
+      playerId: z.string().uuid().optional(),
+      sideFilter: z.enum(["OUR_TEAM", "OPPONENT", "BOTH"]).optional(),
+      leadSeconds: z.number().min(1).max(15).optional(),
+      lagSeconds: z.number().min(1).max(10).optional(),
+      maxClips: z.number().int().min(1).max(100).optional(),
+    }).parse(req.body ?? {});
+    const result = await autoGenerateClips(db, req.user!.id, id, body);
+    return reply.status(201).send(result);
+  });
+
+  // Automated Highlight Reel Assembler (Spec §6.4)
+  app.post("/api/v1/film/games/:id/auto-montage", { config: { access: manageGame } }, async (req, reply) => {
+    const id = idParam.parse(req.params).id;
+    const body = z.object({
+      title: z.string().trim().min(1).max(120).optional(),
+      description: z.string().trim().max(500).optional(),
+      category: z.enum(["THREE_POINTERS", "ALL_SCORING", "ASSISTS", "TURNOVERS", "REBOUNDS", "FOULS", "CUSTOM"]).optional(),
+      playerId: z.string().uuid().optional(),
+      clipIds: z.array(z.string().uuid()).optional(),
+      tags: z.array(z.string().max(40)).optional(),
+      leadSeconds: z.number().min(1).max(15).optional(),
+      lagSeconds: z.number().min(1).max(10).optional(),
+    }).parse(req.body ?? {});
+    const result = await autoAssembleHighlightReel(db, req.user!.id, id, body);
+    return reply.status(201).send(result);
   });
 }
