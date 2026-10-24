@@ -1279,3 +1279,89 @@ export const matchOfficialSignoffs = pgTable(
     index("idx_signoffs_ref").on(t.refereeId),
   ],
 );
+
+
+/** Facility Operator Claims (Spec §8.3, §23.1). */
+export const facilityClaims = pgTable(
+  "facility_claims",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courtId: uuid("court_id").notNull().references(() => courts.id, { onDelete: "cascade" }),
+    operatorId: uuid("operator_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    businessName: text("business_name").notNull(),
+    contactEmail: text("contact_email").notNull(),
+    contactPhone: text("contact_phone"),
+    status: varchar("status", { length: 20 }).notNull().default("PENDING"), // PENDING | APPROVED | REJECTED
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_facility_claims_court_operator").on(t.courtId, t.operatorId),
+    index("idx_facility_claims_court").on(t.courtId),
+    index("idx_facility_claims_operator").on(t.operatorId),
+  ],
+);
+
+/** Court Operating Hours & Slot Pricing (Spec §8.3, §23.1). */
+export const courtOperatingHours = pgTable(
+  "court_operating_hours",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courtId: uuid("court_id").notNull().references(() => courts.id, { onDelete: "cascade" }),
+    dayOfWeek: integer("day_of_week").notNull(), // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    openTime: varchar("open_time", { length: 5 }).notNull(), // "08:00"
+    closeTime: varchar("close_time", { length: 5 }).notNull(), // "22:00"
+    slotDurationMinutes: integer("slot_duration_minutes").notNull().default(60),
+    hourlyRateCents: integer("hourly_rate_cents").notNull().default(0),
+    currency: varchar("currency", { length: 3 }).notNull().default("USD"),
+    isClosed: boolean("is_closed").notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex("uq_operating_hours_court_day").on(t.courtId, t.dayOfWeek),
+    index("idx_operating_hours_court").on(t.courtId),
+  ],
+);
+
+/** Court Slot Reservations (Spec §8.3, §23.1). */
+export const courtReservations = pgTable(
+  "court_reservations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courtId: uuid("court_id").notNull().references(() => courts.id, { onDelete: "cascade" }),
+    bookedById: uuid("booked_by_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    startTime: timestamp("start_time", { withTimezone: true }).notNull(),
+    endTime: timestamp("end_time", { withTimezone: true }).notNull(),
+    purpose: varchar("purpose", { length: 30 }).notNull().default("PICKUP_RUN"), // LEAGUE_MATCH | TEAM_PRACTICE | PICKUP_RUN | TRAINING | COMMUNITY_EVENT | OTHER
+    status: varchar("status", { length: 20 }).notNull().default("CONFIRMED"), // PENDING | CONFIRMED | CANCELLED | COMPLETED
+    totalPriceCents: integer("total_price_cents").notNull().default(0),
+    notes: text("notes"),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancellationReason: text("cancellation_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_reservations_court_time").on(t.courtId, t.startTime),
+    index("idx_reservations_user").on(t.bookedById),
+  ],
+);
+
+/** Court Maintenance Logs (Spec §8.3, §23.1). */
+export const courtMaintenanceLogs = pgTable(
+  "court_maintenance_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courtId: uuid("court_id").notNull().references(() => courts.id, { onDelete: "cascade" }),
+    loggedById: uuid("logged_by_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    category: varchar("category", { length: 40 }).notNull(), // SURFACE_RESURFACING | RIM_REPLACEMENT | NET_REPLACEMENT | BACKBOARD_INSPECTION | LIGHTING_REPAIR | COURT_STRIPING | GENERAL_CLEANING | SAFETY_AUDIT
+    description: text("description").notNull(),
+    severity: varchar("severity", { length: 30 }).notNull().default("ROUTINE"), // ROUTINE | RECOMMENDED | URGENT_SAFETY_HAZARD
+    costCents: integer("cost_cents").notNull().default(0),
+    performedAt: timestamp("performed_at", { withTimezone: true }).notNull(),
+    nextInspectionDue: timestamp("next_inspection_due", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_maintenance_court").on(t.courtId),
+    index("idx_maintenance_performed").on(t.courtId, t.performedAt),
+  ],
+);
