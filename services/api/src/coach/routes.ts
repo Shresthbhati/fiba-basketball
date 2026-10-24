@@ -2,6 +2,10 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/index.js";
 import {
+  generateOpponentScoutingDossier,
+  getOpponentTendencyAnalysis,
+} from "./scouting-tendencies.js";
+import {
   createAssignment,
   getAssignment,
   listAssignments,
@@ -106,5 +110,28 @@ export function registerCoachRoutes(app: FastifyInstance, db: Db) {
   app.get("/api/v1/teams/:teamId/coach-dashboard", authed, async (req) => {
     const dashboard = await getCoachDashboard(db, me(req), teamIdOf(req));
     return dashboard;
+  });
+
+  const oppParam = z.object({ teamId: z.string().uuid(), opponentTeamId: z.string().uuid() });
+
+  // 7. Opponent Tendency Breakdown (Spec §10.2, §11.1)
+  app.get("/api/v1/teams/:teamId/scouting/opponents/:opponentTeamId", authed, async (req) => {
+    const { teamId, opponentTeamId } = oppParam.parse(req.params);
+    const query = z.object({ competitionId: z.string().uuid().optional() }).parse(req.query);
+    return getOpponentTendencyAnalysis(db, me(req), teamId, opponentTeamId, query);
+  });
+
+  // 8. Generate & Save Opponent Tactical Scouting Report (Spec §10.2, §11.4)
+  app.post("/api/v1/teams/:teamId/scouting/opponents/:opponentTeamId/generate", authed, async (req, reply) => {
+    const { teamId, opponentTeamId } = oppParam.parse(req.params);
+    const body = z.object({
+      competitionId: z.string().uuid().optional(),
+      title: z.string().trim().max(150).optional(),
+    }).parse(req.body ?? {});
+    const result = await generateOpponentScoutingDossier(db, me(req), teamId, {
+      opponentTeamId,
+      ...body,
+    });
+    return reply.status(201).send(result);
   });
 }
