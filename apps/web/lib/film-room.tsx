@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, api } from "./api";
 import { SCORING_TYPES, fmtTime, timelineLabel, type Clip, type FilmGame, type TeamMatch, type Timeline } from "./film-types";
+import { AutoClipModal } from "./auto-clip-modal";
 
 const msg = (e: unknown) => (e instanceof ApiError ? e.message : "Could not reach the server.");
 const TYPES = ["video/mp4", "video/webm", "video/quicktime"];
@@ -23,6 +24,7 @@ export function FilmRoom({ gameId }: { gameId: string }) {
   const [pickEvent, setPickEvent] = useState("");
   const [tags, setTags] = useState("");
   const [note, setNote] = useState("");
+  const [showAutoClipModal, setShowAutoClipModal] = useState(false);
 
   const loadGame = useCallback(async () => {
     try { setGame(await api<FilmGame>(`/film/games/${gameId}`)); }
@@ -169,6 +171,29 @@ export function FilmRoom({ gameId }: { gameId: string }) {
               </ul>
             )}
             {canManage && timeline.synced && (
+              <div style={{ marginTop: 12, marginBottom: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAutoClipModal(true)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 14px",
+                    borderRadius: 6,
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 13,
+                  }}
+                >
+                  ⚡ Auto-Generate Clips & Highlight Reel
+                </button>
+              </div>
+            )}
+            {canManage && timeline.synced && (
               <>
                 <ul aria-label="Sync points" style={{ listStyle: "none", padding: 0, display: "grid", gap: 4 }}>
                   {timeline.syncPoints.map((p) => {
@@ -216,6 +241,15 @@ export function FilmRoom({ gameId }: { gameId: string }) {
           </form>
         )}
       </section>
+
+      {showAutoClipModal && (
+        <AutoClipModal
+          gameId={gameId}
+          gameTitle={game.title}
+          onClipsGenerated={loadClips}
+          onClose={() => setShowAutoClipModal(false)}
+        />
+      )}
     </div>
   );
 }

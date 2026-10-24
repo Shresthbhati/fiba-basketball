@@ -96,6 +96,7 @@ export async function timeline(db: Db, gameId: string) {
     const videoMs = a ? videoMsOf(e.occurredAt, a.at, a.videoMs) : null;
     items.push({
       id: e.id, type: e.type, side: e.side, period: e.period, videoMs: videoMs !== null && videoMs >= 0 ? videoMs : null,
+      playerId: e.playerId ?? null,
       jersey: e.playerId ? (jersey.get(e.playerId) ?? null) : null,
       ...(e.playerId && e.side === ours && names.get(e.playerId) ? { playerName: names.get(e.playerId) } : {}),
       homeScore: home, awayScore: away,
