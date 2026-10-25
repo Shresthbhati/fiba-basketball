@@ -1716,3 +1716,57 @@ export const accountErasureRequests = pgTable(
     index("idx_account_erasure_user").on(t.userId),
   ],
 );
+
+
+/** User Notification Preferences, Quiet Hours & Daily Delivery Caps (WP-5.1, Master Spec §11.4). */
+export const notificationPreferences = pgTable(
+  "notification_preferences",
+  {
+    userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+    webPushEnabled: boolean("web_push_enabled").notNull().default(true),
+    emailEnabled: boolean("email_enabled").notNull().default(true),
+    gameInvites: boolean("game_invites").notNull().default(true),
+    courtAlerts: boolean("court_alerts").notNull().default(true),
+    teamAnnouncements: boolean("team_announcements").notNull().default(true),
+    quietHoursEnabled: boolean("quiet_hours_enabled").notNull().default(true),
+    quietHoursStart: varchar("quiet_hours_start", { length: 5 }).notNull().default("22:00"),
+    quietHoursEnd: varchar("quiet_hours_end", { length: 5 }).notNull().default("08:00"),
+    quietHoursTimezone: varchar("quiet_hours_timezone", { length: 50 }).notNull().default("UTC"),
+    dailyCap: integer("daily_cap").notNull().default(10),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
+/** Web Push VAPID Browser Subscriptions (RFC 8291/8292, WP-5.1). */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_push_sub_user").on(t.userId),
+  ],
+);
+
+/** Notification Delivery Logs for Rate Capping & Audit (WP-5.1). */
+export const notificationDeliveryLogs = pgTable(
+  "notification_delivery_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    channel: text("channel").notNull(),
+    status: text("status").notNull(),
+    suppressionReason: text("suppression_reason"),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_notif_delivery_user_sent").on(t.userId, t.sentAt),
+  ],
+);
