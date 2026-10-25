@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { CourtMap, type PublicCourt } from "../lib/court-map";
 
@@ -44,9 +45,21 @@ const mockCourts: PublicCourt[] = [
   },
 ];
 
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+
+function renderWithProviders(ui: React.ReactElement) {
+  return render(
+    <QueryClientProvider client={queryClient}>
+      {ui}
+    </QueryClientProvider>
+  );
+}
+
 describe("CourtMap", () => {
   it("renders interactive court map and court markers", () => {
-    render(
+    renderWithProviders(
       <CourtMap
         courts={mockCourts}
         centerLat={40.82}
@@ -66,7 +79,7 @@ describe("CourtMap", () => {
 
   it("selects court pin on click and renders Court Detail Card", () => {
     const handleSelect = vi.fn();
-    render(
+    renderWithProviders(
       <CourtMap
         courts={mockCourts}
         centerLat={40.82}
@@ -92,7 +105,7 @@ describe("CourtMap", () => {
   });
 
   it("filters courts by indoor/outdoor and verification status", () => {
-    render(
+    renderWithProviders(
       <CourtMap
         courts={mockCourts}
         centerLat={40.82}
@@ -123,7 +136,7 @@ describe("CourtMap", () => {
 
   it("triggers onCenterChange when preset hub button is clicked", () => {
     const handleCenterChange = vi.fn();
-    render(
+    renderWithProviders(
       <CourtMap
         courts={mockCourts}
         centerLat={40.82}
