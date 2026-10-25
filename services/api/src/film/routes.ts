@@ -20,6 +20,14 @@ import {
   listAnnotations,
   updateAnnotation,
 } from "./annotations.js";
+import {
+  createGameAngle,
+  deleteGameAngle,
+  getGameAngle,
+  listGameAngles,
+  markAngleVideoReady,
+  updateGameAngle,
+} from "./angles.js";
 
 const VIDEO_TYPES = { "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" } as const;
 type VideoType = keyof typeof VIDEO_TYPES;
@@ -260,5 +268,91 @@ export function registerFilm(app: FastifyInstance, db: Db, storage: MediaStorage
     const { id, annotationId } = annotParam.parse(req.params);
     await deleteAnnotation(db, req.user!.id, id, annotationId);
     return reply.status(204).send();
+  });
+
+  // -------------------------------------------------------------------------
+  // Multi-Angle Game Film Synchronization (Spec §6.1, §6.3, §18.2, WP-3.1)
+  // -------------------------------------------------------------------------
+  const angleParam = z.object({ id: z.uuid(), angleId: z.uuid() });
+
+  const createAngleBody = z.object({
+    label: z.string().trim().min(1).max(80),
+    angleType: z.enum(["BROADCAST", "BASELINE", "ENDZONE", "TACTICAL_HIGH", "COURT_SIDE"]),
+    isPrimary: z.boolean().optional(),
+    timeOffsetMs: z.number().int().min(-600000).max(600000).optional(),
+  });
+
+  const updateAngleBody = createAngleBody.partial();
+
+  // List all camera angles for a game
+  app.get("/api/v1/film/games/:id/angles", { config: { access: viewGame } }, async (req) => {
+    const id = idParam.parse(req.params).id;
+    return { items: await listGameAngles(db, id) };
+  });
+
+  // Create / register a new camera angle
+  app.post("/api/v1/film/games/:id/angles", { config: { access: manageGame } }, async (req, reply) => {
+    const id = idParam.parse(req.params).id;
+    const body = createAngleBody.parse(req.body);
+    const angle = await createGameAngle(db, id, body);
+    return reply.status(201).send(angle);
+  });
+
+  // Update angle metadata / offset
+  app.patch("/api/v1/film/games/:id/angles/:angleId", { config: { access: manageGame } }, async (req) => {
+    const { angleId } = angleParam.parse(req.params);
+    const body = updateAngleBody.parse(req.body);
+    return updateGameAngle(db, angleId, body);
+  });
+
+  // Delete angle and video
+  app.delete("/api/v1/film/games/:id/angles/:angleId", { config: { access: manageGame } }, async (req, reply) => {
+    const { angleId } = angleParam.parse(req.params);
+    await deleteGameAngle(db, storage, angleId);
+    return reply.status(204).send();
+  });
+
+  // Upload video stream for this specific angle
+  app.put("/api/v1/film/games/:id/angles/:angleId/video", { config: { access: manageGame } }, async (req, reply) => {
+    const { id, angleId } = angleParam.parse(req.params);
+    await getGameAngle(db, angleId);
+    const type = String(req.headers["content-type"] ?? "").split(";")[0]!.trim() as VideoType;
+    if (!(type in VIDEO_TYPES)) throw new AuthError(415, "Video must be mp4, webm or mov");
+    const declared = Number(req.headers["content-length"] ?? 0);
+    if (declared > maxVideoBytes) throw new AuthError(413, "Video is too large");
+    const key = `film/${id}/angles/${angleId}/${Date.now()}.${VIDEO_TYPES[type]}`;
+    let bytes: number;
+    try {
+      bytes = await storage.put(key, req.body as NodeJS.ReadableStream as never, maxVideoBytes);
+    } catch (e) {
+      if (e instanceof TooLargeError) throw new AuthError(413, "Video is too large");
+      throw e;
+    }
+    if (bytes === 0) {
+      await storage.remove(key);
+      throw new AuthError(400, "Empty upload");
+    }
+    await markAngleVideoReady(db, angleId, { key, type, bytes });
+    return reply.status(204).send();
+  });
+
+  // Byte-range streaming for specific angle
+  app.get("/api/v1/film/games/:id/angles/:angleId/video", { config: { access: viewGame } }, async (req, reply) => {
+    const { angleId } = angleParam.parse(req.params);
+    const angle = await getGameAngle(db, angleId);
+    if (angle.videoStatus !== "READY" || !angle.videoKey) throw new AuthError(404, "Not Found");
+    const total = await storage.size(angle.videoKey);
+    if (total === null) throw new AuthError(404, "Not Found");
+    reply.header("accept-ranges", "bytes").header("cache-control", "private, no-store").type(angle.videoType ?? "application/octet-stream");
+    const m = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ""));
+    if (!m) return reply.header("content-length", total).send(storage.read(angle.videoKey));
+    let start = m[1] === "" ? NaN : Number(m[1]);
+    let end = m[2] === "" ? NaN : Number(m[2]);
+    if (Number.isNaN(start) && Number.isNaN(end)) return reply.status(416).header("content-range", `bytes */${total}`).send();
+    if (Number.isNaN(start)) { start = Math.max(0, total - end); end = total - 1; }
+    else if (Number.isNaN(end) || end >= total) end = total - 1;
+    if (start > end || start >= total) return reply.status(416).header("content-range", `bytes */${total}`).send();
+    return reply.status(206).header("content-range", `bytes ${start}-${end}/${total}`).header("content-length", end - start + 1)
+      .send(storage.read(angle.videoKey, { start, end }));
   });
 }
