@@ -5,10 +5,11 @@ import { can } from "../authz/service.js";
 import type { Db } from "../db/index.js";
 import { AuthError } from "../identity/service.js";
 import { getCompetitionEmbedSummary } from "./embed.js";
+import { validateScheduleConflicts } from "./schedule.js";
 import {
-  applyDelay, competitionStandings, createCompetition, listCompetitions, createTeam, generateSchedule,
-  getCommandCenter, getCompetitionOfficials, getMatch, getTeam, listMatches, listTeams,
-  lockMatch, matchDetail, previewDelayImpact, recordForfeit, recordResult, setMatchTime, registerTeam, visibleCompetition,
+  applyAutoSchedule, applyDelay, competitionGroupStandings, competitionStandings, createCompetition, listCompetitions, createTeam, generateSchedule,
+  getCommandCenter, getCompetitionOfficials, getCompetitionScheduleConflicts, getMatch, getTeam, listMatches, listTeams,
+  lockMatch, matchDetail, previewDelayImpact, recordForfeit, recordResult, setMatchTime, registerTeam, setTeamGroup, visibleCompetition,
 } from "./service.js";
 
 const id = z.object({ id: z.uuid() });
@@ -36,7 +37,12 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
 
   app.post("/api/v1/competitions", { config: { access: { action: "competition:create" } } }, async (req, reply) => {
     adultsOnly(req);
-    const body = z.object({ name: z.string().trim().min(1).max(100), format: z.enum(["ROUND_ROBIN", "SINGLE_ELIMINATION"]) }).parse(req.body);
+    const body = z.object({
+      name: z.string().trim().min(1).max(100),
+      format: z.enum(["ROUND_ROBIN", "SINGLE_ELIMINATION", "GROUPS_TO_PLAYOFFS"]),
+      groupCount: z.number().int().min(2).max(8).optional(),
+      advancePerGroup: z.number().int().min(1).max(4).optional(),
+    }).parse(req.body);
     return reply.status(201).send(await createCompetition(db, req.user!.id, body));
   });
 
@@ -51,9 +57,20 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
   });
 
   app.post("/api/v1/competitions/:id/teams", { config: { access: manage } }, async (req, reply) => {
-    const body = z.object({ teamId: z.uuid(), seed: z.number().int().min(1).optional() }).parse(req.body);
-    await registerTeam(db, compId(req), body.teamId, body.seed);
+    const body = z.object({
+      teamId: z.uuid(),
+      seed: z.number().int().min(1).optional(),
+      groupName: z.string().trim().min(1).max(40).optional(),
+    }).parse(req.body);
+    await registerTeam(db, compId(req), body.teamId, body.seed, body.groupName);
     return reply.status(201).send({ ok: true });
+  });
+
+  app.patch("/api/v1/competitions/:id/teams/:teamId/group", { config: { access: manage } }, async (req, reply) => {
+    const p = z.object({ id: z.uuid(), teamId: z.uuid() }).parse(req.params);
+    const body = z.object({ groupName: z.string().trim().min(1).max(40).nullable() }).parse(req.body);
+    await setTeamGroup(db, p.id, p.teamId, body.groupName);
+    return reply.send({ ok: true });
   });
 
   // Rosters: visible to the team's members and the competition's organizer only (the handlers answer 404 to everyone else).
@@ -92,6 +109,13 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
     return { items: await competitionStandings(db, cid) };
   });
 
+  app.get("/api/v1/competitions/:id/group-standings", { config: { access: "public" } }, async (req) => {
+    const cid = compId(req);
+    const manager = req.user ? await can(db, req.user.id, "competition:manage", { type: "competition", id: cid }) : false;
+    await visibleCompetition(db, cid, manager);
+    return competitionGroupStandings(db, cid);
+  });
+
   app.get("/api/v1/competitions/:id/officials", { config: { access: manage } }, async (req) => ({
     items: await getCompetitionOfficials(db, compId(req)),
   }));
@@ -109,6 +133,45 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
     previewDelayImpact(db, compId(req), delayInput.parse(req.body)),
   );
 
+  // Schedule conflict detection and validation (Spec §10.2, §17.1)
+  app.get("/api/v1/competitions/:id/schedule/conflicts", { config: { access: "public" } }, async (req) => {
+    const cid = compId(req);
+    const query = z.object({
+      minRestMinutes: z.coerce.number().int().min(0).max(300).optional(),
+    }).parse(req.query);
+    return getCompetitionScheduleConflicts(db, cid, query);
+  });
+
+  app.post("/api/v1/competitions/:id/schedule/validate", { config: { access: "public" } }, async (req) => {
+    const body = z.object({
+      matches: z.array(z.object({
+        id: z.string(),
+        homeTeamId: z.string().nullable().optional(),
+        awayTeamId: z.string().nullable().optional(),
+        courtName: z.string().nullable().optional(),
+        scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
+        estimatedDurationMinutes: z.number().int().min(15).max(240).optional(),
+        isBye: z.boolean().optional(),
+      })),
+      minRestMinutes: z.number().int().min(0).max(300).optional(),
+    }).parse(req.body);
+    return validateScheduleConflicts(body.matches, { minRestMinutes: body.minRestMinutes });
+  });
+
+  app.post("/api/v1/competitions/:id/schedule/auto-assign", { config: { access: manage } }, async (req) => {
+    const cid = compId(req);
+    const body = z.object({
+      availableCourts: z.array(z.string().trim().min(1)).min(1),
+      startDateTime: z.string().datetime({ offset: true }),
+      matchDurationMinutes: z.number().int().min(15).max(180).optional(),
+      bufferMinutes: z.number().int().min(0).max(60).optional(),
+      minRestMinutes: z.number().int().min(0).max(240).optional(),
+      dailyStartHour: z.number().int().min(0).max(23).optional(),
+      dailyEndHour: z.number().int().min(1).max(24).optional(),
+    }).parse(req.body);
+    return applyAutoSchedule(db, cid, body);
+  });
+
   app.post("/api/v1/competitions/:id/apply-delay", { config: { access: manage } }, async (req) =>
     applyDelay(db, compId(req), delayInput.parse(req.body)),
   );
@@ -123,8 +186,18 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
     return matchDetail(db, m.id);
   });
   app.patch("/api/v1/matches/:id", { config: { access: manageMatch } }, async (req) => {
-    const body = z.object({ scheduledAt: z.iso.datetime({ offset: true }).nullable() }).parse(req.body);
-    return setMatchTime(db, compId(req), body.scheduledAt === null ? null : new Date(body.scheduledAt));
+    const body = z.object({
+      scheduledAt: z.iso.datetime({ offset: true }).nullable().optional(),
+      courtName: z.string().trim().nullable().optional(),
+      estimatedDurationMinutes: z.number().int().min(15).max(240).optional(),
+    }).parse(req.body);
+    return setMatchTime(
+      db,
+      compId(req),
+      body.scheduledAt !== undefined ? (body.scheduledAt === null ? null : new Date(body.scheduledAt)) : undefined,
+      body.courtName,
+      body.estimatedDurationMinutes
+    );
   });
   app.post("/api/v1/matches/:id/forfeit", { config: { access: manageMatch } }, async (req) =>
     recordForfeit(db, compId(req), req.user!.id, z.object({ winner: z.enum(["home", "away"]) }).parse(req.body).winner),

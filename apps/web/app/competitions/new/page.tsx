@@ -30,6 +30,7 @@ export default function NewCompetition() {
           <select name="format" defaultValue="ROUND_ROBIN">
             <option value="ROUND_ROBIN">Round robin (everyone plays everyone)</option>
             <option value="SINGLE_ELIMINATION">Knockout (lose and you're out)</option>
+            <option value="GROUPS_TO_PLAYOFFS">Pool play to playoffs (groups + knockout)</option>
           </select>
         </label>
         {error && <p role="alert" style={{ color: "#ff6b6b" }}>{error}</p>}
