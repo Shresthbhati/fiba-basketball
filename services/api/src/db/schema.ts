@@ -715,12 +715,22 @@ export const verifiedAchievements = pgTable(
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     competitionId: uuid("competition_id").references(() => competitions.id, { onDelete: "set null" }),
     title: text("title").notNull(),
-    category: text("category").notNull(), // AWARD | CHAMPIONSHIP | SELECTION
+    category: text("category").notNull(), // AWARD | CHAMPIONSHIP | SELECTION | MILESTONE
     issuer: text("issuer").notNull(),
+    signature: text("signature"),
+    evidenceUrl: text("evidence_url"),
+    evidenceRef: text("evidence_ref"),
+    isRevoked: boolean("is_revoked").notNull().default(false),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revocationReason: text("revocation_reason"),
+    revokedBy: uuid("revoked_by").references(() => users.id, { onDelete: "set null" }),
     verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("verified_achievements_user_idx").on(t.userId)],
+  (t) => [
+    index("verified_achievements_user_idx").on(t.userId),
+    index("verified_achievements_user_revoked_idx").on(t.userId, t.isRevoked),
+  ],
 );
 
 /** Basketball practice drills catalog (WP-4.3, Master Spec §9.2). */

@@ -309,6 +309,13 @@
       "when": 1792759000000,
       "tag": "0043_film_game_angles",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792760000000,
+      "tag": "0044_verified_achievements_crypto_signatures",
+      "breakpoints": true
     }
   ]
 }
