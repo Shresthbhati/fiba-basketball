@@ -195,13 +195,18 @@ export const matches = pgTable(
     state: text("state").notNull().default("SCHEDULED"), // SCHEDULED | LIVE | FINISHED | LOCKED
     isBye: boolean("is_bye").notNull().default(false),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    courtName: text("court_name"),
+    estimatedDurationMinutes: integer("estimated_duration_minutes").notNull().default(60),
     homeScore: integer("home_score"),
     awayScore: integer("away_score"),
     forfeit: boolean("forfeit").notNull().default(false),
     nextMatchId: uuid("next_match_id"),
     nextSide: text("next_side"), // home | away
   },
-  (t) => [index("matches_competition_idx").on(t.competitionId)],
+  (t) => [
+    index("matches_competition_idx").on(t.competitionId),
+    index("matches_court_scheduled_idx").on(t.courtName, t.scheduledAt),
+  ],
 );
 
 // Append-only: every entered or corrected result is kept.

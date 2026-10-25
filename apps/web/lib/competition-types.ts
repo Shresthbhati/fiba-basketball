@@ -3,13 +3,14 @@ export type CompetitionDetail = CompetitionSummary & { teams: { id: string; name
 export type MatchRow = {
   id: string; round: number; slot: number; homeTeamId: string | null; awayTeamId: string | null; state: "SCHEDULED" | "LIVE" | "FINISHED" | "LOCKED";
   isBye: boolean; homeScore: number | null; awayScore: number | null; scheduledAt?: string | null; forfeit?: boolean;
+  courtName?: string | null; estimatedDurationMinutes?: number;
 };
 export type OfficialRow = { id: string; userId: string; role: "SCOREKEEPER" | "REFEREE"; email: string; displayName: string; createdAt: string };
-export type CommandCenterAlerts = { delayed: boolean; unresolved: boolean; missingOfficials: boolean };
+export type CommandCenterAlerts = { delayed: boolean; unresolved: boolean; missingOfficials: boolean; hasConflict?: boolean };
 export type CommandCenterMatch = MatchRow & { homeName: string; awayName: string; alerts: CommandCenterAlerts };
 export type CommandCenterData = {
   competition: CompetitionSummary;
-  summary: { totalMatches: number; scheduled: number; live: number; finished: number; delayed: number; unresolved: number; officialsCount: number };
+  summary: { totalMatches: number; scheduled: number; live: number; finished: number; delayed: number; unresolved: number; officialsCount: number; conflictCount?: number };
   officials: OfficialRow[];
   matches: CommandCenterMatch[];
 };

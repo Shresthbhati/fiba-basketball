@@ -4,7 +4,14 @@ import type { Db } from "../db/index.js";
 import { competitionTeams, competitions, matchResultLog, matches, roleAssignments, teams, users } from "../db/schema.js";
 import { AuthError } from "../identity/service.js";
 import { canTransition, type MatchState } from "../match/match-state.js";
-import { roundRobin, singleElimination } from "./schedule.js";
+import {
+  autoScheduleTournament,
+  roundRobin,
+  singleElimination,
+  validateScheduleConflicts,
+  type AutoScheduleOptions,
+  type ScheduleValidationOptions,
+} from "./schedule.js";
 import { standings, type Result } from "./standings.js";
 
 type Match = typeof matches.$inferSelect;
@@ -137,17 +144,69 @@ export async function matchDetail(db: Db, id: string) {
   return {
     id: m.id, competitionId: m.competitionId, competitionName: c.name, round: m.round, slot: m.slot, state: m.state, isBye: m.isBye,
     scheduledAt: m.scheduledAt ? m.scheduledAt.toISOString() : null,
+    courtName: m.courtName ?? null,
+    estimatedDurationMinutes: m.estimatedDurationMinutes ?? 60,
     home: side(m.homeTeamId), away: side(m.awayTeamId), homeScore: m.homeScore, awayScore: m.awayScore,
   };
 }
 
 /** Set or clear the planned start time. Played (or bye) matches keep their time. */
-export async function setMatchTime(db: Db, id: string, scheduledAt: Date | null) {
+export async function setMatchTime(
+  db: Db,
+  id: string,
+  scheduledAt?: Date | null,
+  courtName?: string | null,
+  estimatedDurationMinutes?: number
+) {
   const m = await getMatch(db, id);
   if (m.isBye) throw new AuthError(409, "Bye matches have no time");
   if (m.state === "LOCKED" || m.state === "FINISHED") throw new AuthError(409, "A finished match can't be rescheduled");
-  await db.update(matches).set({ scheduledAt }).where(eq(matches.id, id));
+  await db
+    .update(matches)
+    .set({
+      ...(scheduledAt !== undefined ? { scheduledAt } : {}),
+      ...(courtName !== undefined ? { courtName } : {}),
+      ...(estimatedDurationMinutes !== undefined ? { estimatedDurationMinutes } : {}),
+    })
+    .where(eq(matches.id, id));
   return matchDetail(db, id);
+}
+
+export async function getCompetitionScheduleConflicts(
+  db: Db,
+  competitionId: string,
+  options: ScheduleValidationOptions = {}
+) {
+  await getCompetition(db, competitionId);
+  const allMatches = await listMatches(db, competitionId);
+  return validateScheduleConflicts(allMatches, options);
+}
+
+export async function applyAutoSchedule(
+  db: Db,
+  competitionId: string,
+  options: AutoScheduleOptions
+) {
+  await getCompetition(db, competitionId);
+  const allMatches = await listMatches(db, competitionId);
+  const unplayedMatches = allMatches.filter((m) => m.state === "SCHEDULED" && !m.isBye);
+
+  const result = autoScheduleTournament(unplayedMatches, options);
+
+  await tx(db, async (t) => {
+    for (const asgn of result.assignments) {
+      await t
+        .update(matches)
+        .set({
+          courtName: asgn.courtName,
+          scheduledAt: new Date(asgn.scheduledAt),
+          estimatedDurationMinutes: asgn.estimatedDurationMinutes,
+        })
+        .where(eq(matches.id, asgn.matchId));
+    }
+  });
+
+  return result;
 }
 
 export const FORFEIT_WINNER_POINTS = 20;
@@ -245,6 +304,7 @@ export async function getCommandCenter(db: Db, competitionId: string) {
   const teamList = await listTeams(db, competitionId);
   const teamMap = new Map(teamList.map((t) => [t.id, t.name]));
   const officials = await getCompetitionOfficials(db, competitionId);
+  const scheduleValidation = validateScheduleConflicts(allMatches);
   const now = new Date();
 
   const formattedMatches = allMatches.map((m) => {
@@ -263,6 +323,8 @@ export async function getCommandCenter(db: Db, competitionId: string) {
       state: m.state,
       isBye: m.isBye,
       scheduledAt: m.scheduledAt ? m.scheduledAt.toISOString() : null,
+    courtName: m.courtName ?? null,
+    estimatedDurationMinutes: m.estimatedDurationMinutes ?? 60,
       homeScore: m.homeScore,
       awayScore: m.awayScore,
       forfeit: m.forfeit,
@@ -270,6 +332,8 @@ export async function getCommandCenter(db: Db, competitionId: string) {
         delayed: isDelayed,
         unresolved: isUnresolved,
         missingOfficials,
+        hasConflict: scheduleValidation.conflicts.some((cf) => cf.matchIds.includes(m.id)),
+        conflicts: scheduleValidation.conflicts.filter((cf) => cf.matchIds.includes(m.id)),
       },
     };
   });
@@ -288,8 +352,10 @@ export async function getCommandCenter(db: Db, competitionId: string) {
       finished: finishedCount,
       delayed: delayedCount,
       unresolved: unresolvedCount,
+      conflictCount: scheduleValidation.conflictCount,
       officialsCount: officials.length,
     },
+    conflicts: scheduleValidation.conflicts,
     officials,
     matches: formattedMatches,
   };

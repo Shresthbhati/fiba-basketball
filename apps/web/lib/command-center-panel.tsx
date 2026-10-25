@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "./api";
 import type { CommandCenterData, DelayImpactPreview } from "./competition-types";
+import { TournamentScheduleManager } from "./tournament-schedule-manager";
 
 type Props = {
   competitionId: string;
@@ -25,6 +26,7 @@ export function CommandCenterPanel({ competitionId }: Props) {
   const [officialEmail, setOfficialEmail] = useState("");
   const [officialRole, setOfficialRole] = useState<"SCOREKEEPER" | "REFEREE">("SCOREKEEPER");
   const [addingOfficial, setAddingOfficial] = useState(false);
+  const [showScheduleManager, setShowScheduleManager] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -151,7 +153,37 @@ export function CommandCenterPanel({ competitionId }: Props) {
           <div style={{ fontSize: "0.75rem", color: summary.officialsCount === 0 ? "#ef4444" : "var(--muted, #888)" }}>Officials</div>
           <div style={{ fontSize: "1.4rem", fontWeight: "bold" }}>{summary.officialsCount}</div>
         </div>
+        <div style={{ background: "var(--surface, #141418)", padding: "12px 14px", borderRadius: 8, border: (summary.conflictCount ?? 0) > 0 ? "1px solid #ef4444" : "1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ fontSize: "0.75rem", color: (summary.conflictCount ?? 0) > 0 ? "#ef4444" : "var(--muted, #888)" }}>Conflicts</div>
+          <div style={{ fontSize: "1.4rem", fontWeight: "bold", color: (summary.conflictCount ?? 0) > 0 ? "#ef4444" : "inherit" }}>{summary.conflictCount ?? 0}</div>
+        </div>
       </section>
+
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button
+          type="button"
+          onClick={() => setShowScheduleManager((prev) => !prev)}
+          style={{
+            padding: "8px 16px",
+            borderRadius: 8,
+            background: showScheduleManager ? "#059669" : "#1e293b",
+            color: "#ffffff",
+            fontSize: 13,
+            fontWeight: 600,
+            border: "1px solid #334155",
+            cursor: "pointer",
+          }}
+        >
+          {showScheduleManager ? "✕ Hide Multi-Court Schedule Manager" : "🏟️ Multi-Court Schedule & Conflict Manager"}
+        </button>
+      </div>
+
+      {showScheduleManager && (
+        <TournamentScheduleManager
+          competitionId={competitionId}
+          canManage={true}
+        />
+      )}
 
       {/* 2. Operations Alerts */}
       {(delayedMatches.length > 0 || summary.officialsCount === 0 || unresolvedMatches.length > 0) && (
