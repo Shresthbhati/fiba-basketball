@@ -14,6 +14,7 @@ export const fmtTime = (ms: number) => {
 
 export type TimelineItem = {
   id: string; type: string; side: "home" | "away" | null; period: number; videoMs: number | null;
+  playerId?: string | null;
   jersey: number | null; playerName?: string; homeScore: number; awayScore: number;
 };
 export type Timeline = { linked: false } | { linked: true; synced: boolean; ours: "home" | "away"; items: TimelineItem[]; untimed: number; syncPoints: { eventId: string; videoMs: number }[] };
