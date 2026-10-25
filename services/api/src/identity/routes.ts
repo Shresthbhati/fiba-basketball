@@ -1,4 +1,5 @@
 import { myCareer } from "../career/service.js";
+import { exportUserData, deleteUserAccount } from "./privacy.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { permissionsFor } from "../authz/service.js";
@@ -107,4 +108,17 @@ export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCoo
   app.get("/api/v1/me/permissions", { config: { access: "authenticated" } }, async (req) =>
     permissionsFor(db, req.user!.id),
   );
+
+  // Self-service GDPR data archive export (Spec §24.4)
+  app.get("/api/v1/me/export-data", { config: { access: "authenticated" } }, async (req) =>
+    exportUserData(db, req.user!.id)
+  );
+
+  // Self-service right to erasure / account deletion (Spec §24.4)
+  app.post("/api/v1/me/delete-account", { config: { access: "authenticated" } }, async (req, reply) => {
+    const { password } = z.object({ password: z.string().min(1) }).parse(req.body);
+    await deleteUserAccount(db, req.user!.id, password);
+    reply.clearCookie(COOKIE, { path: "/", httpOnly: true, sameSite: "lax", secure: false });
+    return reply.status(200).send({ ok: true });
+  });
 }
