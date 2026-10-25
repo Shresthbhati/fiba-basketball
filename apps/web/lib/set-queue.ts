@@ -27,7 +27,13 @@ export class SetQueue {
     this.pending = store.load(this.key)?.pending ?? [];
   }
   private get key() { return `ciq.sets.${this.sessionId}`; }
-  private emit() { this.store.save(this.key, { pending: this.pending }); this.listeners.forEach((l) => l()); }
+  private emit() {
+    this.store.save(this.key, { pending: this.pending });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("ciq:queue-updated"));
+    }
+    this.listeners.forEach((l) => l());
+  }
   subscribe(fn: () => void): () => void { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
   get items(): readonly PendingSet[] { return this.pending; }
 

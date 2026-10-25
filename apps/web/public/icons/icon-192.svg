@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="36" fill="#0f172a"/>
+  <!-- Basketball Court Key / Paint lines -->
+  <circle cx="96" cy="96" r="64" fill="#f97316" stroke="#ea580c" stroke-width="4"/>
+  <!-- Basketball Seams -->
+  <line x1="32" y1="96" x2="160" y2="96" stroke="#0f172a" stroke-width="4" stroke-linecap="round"/>
+  <line x1="96" y1="32" x2="96" y2="160" stroke="#0f172a" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 50,50 Q 96,96 50,142" fill="none" stroke="#0f172a" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 142,50 Q 96,96 142,142" fill="none" stroke="#0f172a" stroke-width="4" stroke-linecap="round"/>
+  <!-- Court IQ Emblem -->
+  <circle cx="96" cy="96" r="16" fill="#0f172a"/>
+  <circle cx="96" cy="96" r="8" fill="#ffffff"/>
+</svg>

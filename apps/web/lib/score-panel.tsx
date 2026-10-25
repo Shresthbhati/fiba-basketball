@@ -46,7 +46,12 @@ export function ScorePanel({ queue, onFinalize, info, rosters }: { queue: ScoreQ
     const t = setInterval(() => void queue.sync(), 5000);
     const on = () => void queue.sync();
     window.addEventListener("online", on);
-    return () => { clearInterval(t); window.removeEventListener("online", on); };
+    window.addEventListener("ciq:sync", on);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("online", on);
+      window.removeEventListener("ciq:sync", on);
+    };
   }, [queue]);
 
   const add = (type: string, side?: Side) => {
