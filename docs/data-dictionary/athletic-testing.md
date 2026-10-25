@@ -90,3 +90,37 @@ Base path: `/api/v1/athletic-testing`
 - `POST /sessions/:id/attempts`: Record an attempt with instrument metadata and source provenance.
 - `DELETE /attempts/:id`: Delete an erroneous attempt.
 - `GET /athletes/:userId/profile`: Aggregated combine profile, best historical marks, percentile rankings against selected cohort, and radar signature. Negative authZ (404) for unauthorized viewers.
+
+---
+
+## 6. Multi-Camera Assessment Streams (`assessment_camera_streams`)
+Multi-angle video capture and synchronization for Player Lab motion analysis (Spec §4.1, §6.3, §9.2):
+- `id`: UUIDv7 PK.
+- `assessmentId`: UUID referencing `movement_assessments.id` (CASCADE).
+- `cameraLabel`: `PRIMARY_SAGITTAL` | `SECONDARY_FRONTAL` | `ELEVATED_REAR` | `BASELINE_WIDE`.
+- `videoUrl`: S3/MinIO presigned storage URL.
+- `syncOffsetMs`: Integer millisecond offset relative to primary stream for frame-accurate scrubbing.
+- `resolution`: Text descriptor (e.g., `1080p`, `4K`).
+- `fps`: Frame rate integer (e.g., `60`, `120`, `240`).
+- `isPrimary`: Boolean designating the primary master synchronization stream.
+- `calibratedDistanceM`: Numeric distance from subject for spatial scaling.
+- `createdAt`: ISO 8601 timestamp.
+
+---
+
+## 7. Shooting Mechanics Benchmarks (`shooting_mechanics_benchmarks`)
+Kinematic reference thresholds for shooting form analysis:
+- `id`: UUIDv7 PK.
+- `tier`: `PRO` | `COLLEGIATE` | `VARSITY` | `YOUTH`.
+- `minReleaseAngleDeg` / `maxReleaseAngleDeg`: Optimal ball release trajectory window (typically 46°–55°).
+- `maxElbowFlareDeg`: Maximum recommended outward elbow flare (typically $\le 12^\circ$).
+- `minReleaseTimeS` / `maxReleaseTimeS`: Gather-to-release duration benchmarks.
+- `description`: Text coaching notes.
+
+### Biomechanical Analysis Endpoints:
+- `POST /api/v1/assessments/:id/streams`: Register multi-angle camera stream.
+- `GET /api/v1/assessments/:id/streams`: List streams for assessment (enforces negative authZ 404).
+- `DELETE /api/v1/assessments/streams/:streamId`: Remove camera stream.
+- `POST /api/v1/assessments/:id/analyze-shooting`: Execute shooting form kinematic scoring against tier benchmarks.
+- `POST /api/v1/assessments/:id/analyze-landing`: Execute bilateral landing stability and knee valgus assessment per ADR-0009.
+

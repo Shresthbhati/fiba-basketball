@@ -246,6 +246,48 @@
       "when": 1792750000000,
       "tag": "0034_referee_workspace_and_signoff",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792751000000,
+      "tag": "0035_facility_operations_and_reservations",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792752000000,
+      "tag": "0036_guardian_portal_and_youth_safety",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792753000000,
+      "tag": "0037_match_protests_and_dispute_tribunal",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792754000000,
+      "tag": "0038_multicam_player_lab_and_shooting_mechanics",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792755000000,
+      "tag": "0039_scout_evaluations_and_consensus",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792756000000,
+      "tag": "0040_film_telestrator_annotations",
+      "breakpoints": true
     }
   ]
 }

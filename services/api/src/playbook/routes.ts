@@ -9,6 +9,12 @@ import {
   updateTacticalPlay,
   deleteTacticalPlay,
 } from "./service.js";
+import {
+  exportPlaySvgById,
+  exportPlayPrintHtmlById,
+  renderPlaySvg,
+  renderPlayPrintHtml,
+} from "./export.js";
 
 const idParam = z.object({ id: z.string().uuid() });
 const idOf = (req: FastifyRequest) => idParam.parse(req.params).id;
@@ -64,6 +70,13 @@ const listQuery = z.object({
   tag: z.string().optional(),
 });
 
+const exportQuery = z.object({
+  theme: z.enum(["light", "dark", "monochrome"]).default("light"),
+  step: z.coerce.number().int().min(1).optional(),
+  width: z.coerce.number().int().min(200).max(2400).default(700),
+  height: z.coerce.number().int().min(200).max(2400).default(500),
+});
+
 export function registerPlaybook(app: FastifyInstance, db: Db) {
   // 1. Create a new tactical play
   app.post("/api/v1/playbook/plays", authed, async (req, reply) => {
@@ -112,5 +125,33 @@ export function registerPlaybook(app: FastifyInstance, db: Db) {
       exportedAt: new Date().toISOString(),
       play,
     };
+  });
+
+  // 7. Export play as standalone Vector SVG
+  app.get("/api/v1/playbook/plays/:id/export/svg", authed, async (req, reply) => {
+    const query = exportQuery.parse(req.query);
+    const svg = await exportPlaySvgById(db, idOf(req), me(req), query);
+    return reply.header("Content-Type", "image/svg+xml; charset=utf-8").send(svg);
+  });
+
+  // 8. Export play as Print-ready HTML Coaching Sheet
+  app.get("/api/v1/playbook/plays/:id/export/print", authed, async (req, reply) => {
+    const html = await exportPlayPrintHtmlById(db, idOf(req), me(req));
+    return reply.header("Content-Type", "text/html; charset=utf-8").send(html);
+  });
+
+  // 9. Ad-hoc Vector SVG generation from payload
+  app.post("/api/v1/playbook/export/svg", authed, async (req, reply) => {
+    const body = createPlayBody.parse(req.body);
+    const query = exportQuery.parse(req.query);
+    const svg = renderPlaySvg(body, query);
+    return reply.header("Content-Type", "image/svg+xml; charset=utf-8").send(svg);
+  });
+
+  // 10. Ad-hoc Print-ready HTML generation from payload
+  app.post("/api/v1/playbook/export/print", authed, async (req, reply) => {
+    const body = createPlayBody.parse(req.body);
+    const html = renderPlayPrintHtml(body);
+    return reply.header("Content-Type", "text/html; charset=utf-8").send(html);
   });
 }

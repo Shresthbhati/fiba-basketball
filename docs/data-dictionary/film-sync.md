@@ -22,4 +22,33 @@ Goal: click an official scoring event and the game film jumps to that moment.
 - Events scored before this feature, or by clients that don't send a time, can't be placed.
 - The scorer's clock and the video's clock only need to agree through the sync point, so the device clock being a little off is fine.
 
-Not built: automatic sync suggestions, clips created from timeline events, jump-to-event from the box score.
+## Automated Event-to-Clip Segmentation & Highlight Reels (Spec §6.2, §6.4)
+When a film game is linked to an official match and has at least one valid sync point (`timeline.synced === true`):
+
+### 1. Auto-Clip Generator
+- `POST /api/v1/film/games/:id/auto-clip`
+  - Parameters:
+    - `category`: `ALL_SCORING` | `THREE_POINTERS` | `ASSISTS` | `TURNOVERS` | `REBOUNDS` | `FOULS` | `CUSTOM`
+    - `eventTypes`: array of explicit `EventType` strings (when `category === "CUSTOM"`)
+    - `playerId`: UUID of target player (optional)
+    - `sideFilter`: `OUR_TEAM` | `OPPONENT` | `BOTH` (default `OUR_TEAM`)
+    - `leadSeconds`: Pre-roll buffer in seconds (default 4s, bounds 1–15s)
+    - `lagSeconds`: Post-roll buffer in seconds (default 2s, bounds 1–10s)
+    - `maxClips`: Maximum clips to generate (default 40, max 100)
+  - Timing: calculates `startMs = max(0, videoMs - leadSeconds * 1000)` and `endMs = videoMs + lagSeconds * 1000`.
+  - Duplicate detection: skips events if a clip already exists within 2 seconds.
+  - Automatically tags: `auto-clip`, event type, period, jersey number, and descriptive score/opponent notes.
+  - Negative authZ: non-members receive RFC 9457 `404 Not Found`.
+
+### 2. Auto-Montage Highlight Reel
+- `POST /api/v1/film/games/:id/auto-montage`
+  - Parameters:
+    - `title`: string (optional, defaults to "Game Highlights: {game.title}")
+    - `description`: string (optional)
+    - `category`: AutoClipCategory
+    - `playerId`: target player UUID (optional)
+    - `clipIds`: array of clip UUIDs (if omitted, auto-generates/selects matching clips)
+    - `leadSeconds`, `lagSeconds`: timing parameters
+  - Assembles clips into a structured `scouting_montages` playlist with ordered items and `totalDurationMs`.
+  - Retrievable via `GET /api/v1/film/montages/:id`.
+

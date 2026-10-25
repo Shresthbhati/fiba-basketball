@@ -29,7 +29,7 @@ export interface ShareGrantItem {
 export interface DetailedAssessment {
   id: string;
   userId: string;
-  protocol: "BODYWEIGHT_SQUAT" | "COUNTERMOVEMENT_JUMP";
+  protocol: "BODYWEIGHT_SQUAT" | "COUNTERMOVEMENT_JUMP" | "SHOOTING_MECHANICS" | "LANDING_STABILITY";
   status: "ACCEPTED" | "NEEDS_REVIEW" | "ABSTAINED";
   sourceType: string;
   confidence: number | null;

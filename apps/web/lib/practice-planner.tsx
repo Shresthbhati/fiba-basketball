@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { PracticeExportModal } from "./practice-export-modal";
+import { PracticeCourtRunner } from "./practice-court-runner";
 
 export type DrillCategory = "WARMUP" | "TECHNICAL" | "TACTICAL" | "SCRIMMAGE" | "COOLDOWN";
 export type DrillIntensity = "LOW" | "MEDIUM" | "HIGH";
@@ -92,6 +94,8 @@ export const PracticePlanner: React.FC<PracticePlannerProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isCourtRunnerOpen, setIsCourtRunnerOpen] = useState(false);
 
   // Recalculate duration dynamically
   const calculatedDuration = practice.blocks.reduce((sum, b) => sum + (b.durationMins || 0), 0);
@@ -244,6 +248,43 @@ export const PracticePlanner: React.FC<PracticePlannerProps> = ({
               </div>
             </div>
 
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 6,
+                fontWeight: 600,
+                fontSize: 14,
+                background: "#f3f4f6",
+                color: "#111827",
+                border: "1px solid #d1d5db",
+                cursor: "pointer",
+              }}
+            >
+              Print / Export PDF
+            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => setIsCourtRunnerOpen(true)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  fontWeight: 600,
+                  fontSize: 14,
+                  background: "#059669",
+                  color: "#ffffff",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                ⏱️ Court Runner
+              </button>
+            )}
             {!readOnly && onSave && (
               <button
                 type="button"
@@ -889,6 +930,25 @@ export const PracticePlanner: React.FC<PracticePlannerProps> = ({
           </div>
         </div>
       )}
+      <PracticeExportModal
+        open={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        practice={practice}
+      />
+      <PracticeCourtRunner
+        practice={practice}
+        isOpen={isCourtRunnerOpen}
+        onClose={() => setIsCourtRunnerOpen(false)}
+        onUpdateStatus={async (newStatus) => {
+          const updated: PracticeSession = { ...practice, status: newStatus };
+          setPractice(updated);
+          if (onSave) await onSave(updated);
+        }}
+        onUpdateAttendance={async (updatedAttendance) => {
+          setPractice({ ...practice, attendance: updatedAttendance });
+          if (onAttendanceUpdate) await onAttendanceUpdate(updatedAttendance);
+        }}
+      />
     </div>
   );
 };

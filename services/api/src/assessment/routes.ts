@@ -12,16 +12,25 @@ import {
   addCoachFeedback,
   updateAssessmentStatus,
 } from "./service.js";
+import {
+  addCameraStream,
+  listCameraStreams,
+  deleteCameraStream,
+  analyzeShootingMechanics,
+  analyzeLandingStability,
+} from "./multicam.js";
 
 const idParam = z.object({ id: z.string().uuid() });
 const grantParam = z.object({ id: z.string().uuid(), grantId: z.string().uuid() });
+const streamParam = z.object({ streamId: z.string().uuid() });
 const idOf = (req: FastifyRequest) => idParam.parse(req.params).id;
 const grantIdOf = (req: FastifyRequest) => grantParam.parse(req.params).grantId;
+const streamIdOf = (req: FastifyRequest) => streamParam.parse(req.params).streamId;
 const me = (req: FastifyRequest) => req.user!.id;
 const authed = { config: { access: "authenticated" as const } };
 
 const assessmentBody = z.object({
-  protocol: z.enum(["BODYWEIGHT_SQUAT", "COUNTERMOVEMENT_JUMP"]),
+  protocol: z.enum(["BODYWEIGHT_SQUAT", "COUNTERMOVEMENT_JUMP", "SHOOTING_MECHANICS", "LANDING_STABILITY"]),
   status: z.enum(["ACCEPTED", "NEEDS_REVIEW", "ABSTAINED"]),
   confidence: z.number().min(0).max(1).optional(),
   modelVersion: z.string().trim().max(100).optional(),
@@ -34,7 +43,7 @@ const assessmentBody = z.object({
 });
 
 const uploadIntentBody = z.object({
-  protocol: z.enum(["BODYWEIGHT_SQUAT", "COUNTERMOVEMENT_JUMP"]),
+  protocol: z.enum(["BODYWEIGHT_SQUAT", "COUNTERMOVEMENT_JUMP", "SHOOTING_MECHANICS", "LANDING_STABILITY"]),
   contentType: z.enum(["video/mp4", "video/webm", "video/quicktime"]),
 });
 
@@ -55,6 +64,32 @@ const updateStatusBody = z.object({
   status: z.enum(["ACCEPTED", "NEEDS_REVIEW", "ABSTAINED"]).optional(),
 });
 
+const addStreamBody = z.object({
+  cameraLabel: z.enum(["PRIMARY_SAGITTAL", "SECONDARY_FRONTAL", "ELEVATED_REAR", "BASELINE_WIDE"]),
+  videoUrl: z.string().url(),
+  syncOffsetMs: z.number().int().min(-60000).max(60000).default(0),
+  resolution: z.string().trim().max(20).optional(),
+  fps: z.number().int().min(1).max(240).optional(),
+  isPrimary: z.boolean().default(false),
+  calibratedDistanceM: z.number().min(0.5).max(30).optional(),
+});
+
+const shootingAnalysisBody = z.object({
+  releaseAngleDeg: z.number().min(20).max(85),
+  releaseTimeS: z.number().min(0.1).max(3.0),
+  elbowFlareDeg: z.number().min(0).max(60),
+  setPoint: z.enum(["ABOVE_BROW", "AT_BROW", "CHEST_LOW"]),
+  guideHandContested: z.boolean().optional(),
+  tier: z.enum(["PRO", "COLLEGIATE", "VARSITY", "YOUTH"]).optional(),
+});
+
+const landingAnalysisBody = z.object({
+  bilateralContactDiffMs: z.number().min(0).max(500),
+  kneeFlexionAtImpactDeg: z.number().min(5).max(120),
+  valgusIndex: z.enum(["NONE", "MILD_MEDIAL", "NOTABLE_VALGUS"]),
+  jumpHeightCm: z.number().min(0).max(150).optional(),
+});
+
 export function registerAssessment(app: FastifyInstance, db: Db, storage: MediaStorage) {
   // 1. Request presigned upload URL for assessment video
   app.post("/api/v1/assessments/upload-intent", authed, async (req, reply) => {
@@ -73,25 +108,26 @@ export function registerAssessment(app: FastifyInstance, db: Db, storage: MediaS
     });
   });
 
-  // 2. Record completed / processed assessment result
+  // 2. Record a completed biomechanical movement assessment
   app.post("/api/v1/assessments", authed, async (req, reply) => {
     const body = assessmentBody.parse(req.body);
-    const created = await recordAssessment(db, me(req), body);
-    return reply.status(201).send(created);
+    const assessment = await recordAssessment(db, me(req), body);
+    return reply.status(201).send(assessment);
   });
 
-  // 3. List user's past assessments
+  // 3. List assessments for current athlete
   app.get("/api/v1/assessments", authed, async (req) => {
     const items = await listAssessments(db, me(req));
     return { items };
   });
 
-  // 4. Get specific assessment details (strictly private to owner or active grantee)
+  // 4. Get detailed assessment by ID (enforcing private owner/grant access)
   app.get("/api/v1/assessments/:id", authed, async (req) => {
-    return getAssessment(db, me(req), idOf(req));
+    const assessment = await getAssessment(db, me(req), idOf(req));
+    return assessment;
   });
 
-  // 5. Create share grant to coach/trainer (WP-2.8)
+  // 5. Grant access to a coach, trainer, or healthcare professional
   app.post("/api/v1/assessments/:id/grants", authed, async (req, reply) => {
     const body = shareGrantBody.parse(req.body);
     const grant = await createShareGrant(db, me(req), idOf(req), body);
@@ -120,5 +156,36 @@ export function registerAssessment(app: FastifyInstance, db: Db, storage: MediaS
   app.patch("/api/v1/assessments/:id", authed, async (req) => {
     const body = updateStatusBody.parse(req.body);
     return updateAssessmentStatus(db, me(req), idOf(req), body);
+  });
+
+  // 10. Multi-Camera Stream: Attach synchronized camera angle
+  app.post("/api/v1/assessments/:id/streams", authed, async (req, reply) => {
+    const body = addStreamBody.parse(req.body);
+    const stream = await addCameraStream(db, me(req), idOf(req), body);
+    return reply.status(201).send(stream);
+  });
+
+  // 11. Multi-Camera Stream: List synchronized camera angles
+  app.get("/api/v1/assessments/:id/streams", authed, async (req) => {
+    const items = await listCameraStreams(db, me(req), idOf(req));
+    return { items };
+  });
+
+  // 12. Multi-Camera Stream: Delete camera stream
+  app.delete("/api/v1/assessments/streams/:streamId", authed, async (req, reply) => {
+    await deleteCameraStream(db, me(req), streamIdOf(req));
+    return reply.status(204).send();
+  });
+
+  // 13. Shooting Mechanics Biomechanical Analysis (Spec §4.1)
+  app.post("/api/v1/assessments/analyze-shooting", authed, async (req) => {
+    const body = shootingAnalysisBody.parse(req.body);
+    return analyzeShootingMechanics(db, body);
+  });
+
+  // 14. Landing Stability & Deceleration Symmetry Analysis (Spec §4.1)
+  app.post("/api/v1/assessments/analyze-landing", authed, async (req) => {
+    const body = landingAnalysisBody.parse(req.body);
+    return analyzeLandingStability(body);
   });
 }

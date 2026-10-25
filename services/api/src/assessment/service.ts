@@ -9,7 +9,7 @@ import {
 import { AuthError } from "../identity/service.js";
 
 export interface AssessmentInput {
-  protocol: "BODYWEIGHT_SQUAT" | "COUNTERMOVEMENT_JUMP";
+  protocol: "BODYWEIGHT_SQUAT" | "COUNTERMOVEMENT_JUMP" | "SHOOTING_MECHANICS" | "LANDING_STABILITY";
   status: "ACCEPTED" | "NEEDS_REVIEW" | "ABSTAINED";
   confidence?: number | undefined;
   modelVersion?: string | undefined;
@@ -98,7 +98,7 @@ export async function recordAssessment(db: Db, userId: string, input: Assessment
 }
 
 /** Check if user can view assessment: either owner or active non-revoked, unexpired grantee. */
-async function canViewAssessment(db: Db, userId: string, assessment: typeof movementAssessments.$inferSelect) {
+export async function canViewAssessment(db: Db, userId: string, assessment: typeof movementAssessments.$inferSelect) {
   if (assessment.userId === userId) return true;
 
   const now = new Date();

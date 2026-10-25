@@ -3,3 +3,4 @@ export * from "./coords";
 export * from "./tokens";
 export * from "./court-renderer";
 export * from "./token-overlay";
+export * from "./vector-export";

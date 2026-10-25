@@ -3,6 +3,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, api } from "./api";
 import { SCORING_TYPES, fmtTime, timelineLabel, type Clip, type FilmGame, type TeamMatch, type Timeline } from "./film-types";
+import { AutoClipModal } from "./auto-clip-modal";
+import { TelestratorCanvas } from "./telestrator-canvas";
 
 const msg = (e: unknown) => (e instanceof ApiError ? e.message : "Could not reach the server.");
 const TYPES = ["video/mp4", "video/webm", "video/quicktime"];
@@ -23,6 +25,8 @@ export function FilmRoom({ gameId }: { gameId: string }) {
   const [pickEvent, setPickEvent] = useState("");
   const [tags, setTags] = useState("");
   const [note, setNote] = useState("");
+  const [showAutoClipModal, setShowAutoClipModal] = useState(false);
+  const [showTelestrator, setShowTelestrator] = useState(false);
 
   const loadGame = useCallback(async () => {
     try { setGame(await api<FilmGame>(`/film/games/${gameId}`)); }
@@ -139,6 +143,42 @@ export function FilmRoom({ gameId }: { gameId: string }) {
         </label>
       )}
 
+      {game.video.status === "READY" && (
+        <div style={{ marginTop: 8, marginBottom: 12, display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => setShowTelestrator((prev) => !prev)}
+            style={{
+              padding: "7px 14px",
+              borderRadius: 6,
+              background: showTelestrator ? "#059669" : "#1e293b",
+              color: "#ffffff",
+              fontSize: 13,
+              fontWeight: 500,
+              border: "1px solid #334155",
+              cursor: "pointer",
+            }}
+          >
+            {showTelestrator ? "✕ Close Telestrator Studio" : "🎨 Telestrator & Keyframe Studio"}
+          </button>
+        </div>
+      )}
+
+      {showTelestrator && (
+        <div style={{ marginBottom: 16 }}>
+          <TelestratorCanvas
+            gameId={gameId}
+            currentTimestampMs={now()}
+            onSeek={(ms) => {
+              if (video.current) {
+                video.current.currentTime = ms / 1000;
+              }
+            }}
+            canManage={game.canManage}
+          />
+        </div>
+      )}
+
       <section aria-label="Scorebook">
         <h2>Scorebook</h2>
         {!game.matchId && !canManage && <p>This film is not linked to an official match.</p>}
@@ -167,6 +207,29 @@ export function FilmRoom({ gameId }: { gameId: string }) {
                   <li key={i.id}><button type="button" className="secondary" onClick={() => jump(i.videoMs!)}>{fmtTime(i.videoMs!)}</button> {timelineLabel(i, timeline.ours)}</li>
                 ))}
               </ul>
+            )}
+            {canManage && timeline.synced && (
+              <div style={{ marginTop: 12, marginBottom: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAutoClipModal(true)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 14px",
+                    borderRadius: 6,
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 13,
+                  }}
+                >
+                  ⚡ Auto-Generate Clips & Highlight Reel
+                </button>
+              </div>
             )}
             {canManage && timeline.synced && (
               <>
@@ -216,6 +279,15 @@ export function FilmRoom({ gameId }: { gameId: string }) {
           </form>
         )}
       </section>
+
+      {showAutoClipModal && (
+        <AutoClipModal
+          gameId={gameId}
+          gameTitle={game.title}
+          onClipsGenerated={loadClips}
+          onClose={() => setShowAutoClipModal(false)}
+        />
+      )}
     </div>
   );
 }
