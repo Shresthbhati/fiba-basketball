@@ -13,6 +13,13 @@ import {
 import { linkMatch, matchesOfTeam, removeSync, setSync, timeline, unlinkMatch } from "./sync.js";
 import { autoAssembleHighlightReel, autoGenerateClips } from "./auto-clip.js";
 import { type EventType } from "../match/event-type.js";
+import {
+  createAnnotation,
+  deleteAnnotation,
+  getAnnotation,
+  listAnnotations,
+  updateAnnotation,
+} from "./annotations.js";
 
 const VIDEO_TYPES = { "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" } as const;
 type VideoType = keyof typeof VIDEO_TYPES;
@@ -182,5 +189,76 @@ export function registerFilm(app: FastifyInstance, db: Db, storage: MediaStorage
     }).parse(req.body ?? {});
     const result = await autoAssembleHighlightReel(db, req.user!.id, id, body);
     return reply.status(201).send(result);
+  });
+
+  // -------------------------------------------------------------------------
+  // Telestrator & Visual Keyframe Annotations (Spec §6.3, §6.8)
+  // -------------------------------------------------------------------------
+
+  const shapeSchema = z.object({
+    id: z.string(),
+    type: z.enum(["ARROW", "CIRCLE", "SPOTLIGHT", "RECTANGLE", "FREEHAND", "TEXT"]),
+    color: z.string(),
+    strokeWidth: z.number().optional(),
+    coordinates: z.object({
+      x1: z.number(),
+      y1: z.number(),
+      x2: z.number().optional(),
+      y2: z.number().optional(),
+      radius: z.number().optional(),
+      points: z.array(z.object({ x: z.number(), y: z.number() })).optional(),
+      text: z.string().optional(),
+    }),
+  });
+
+  const createAnnotationBody = z.object({
+    clipId: z.string().uuid().optional(),
+    timestampMs: z.number().int().min(0),
+    durationMs: z.number().int().min(500).max(30000).optional(),
+    title: z.string().trim().min(1).max(120).optional(),
+    category: z.string().trim().max(30).optional(),
+    shapes: z.array(shapeSchema).default([]),
+    notes: z.string().trim().max(1000).optional(),
+  });
+
+  const updateAnnotationBody = createAnnotationBody.partial();
+  const annotParam = z.object({ id: z.uuid(), annotationId: z.uuid() });
+
+  // Create keyframe annotation with telestrator shapes
+  app.post("/api/v1/film/games/:id/annotations", { config: { access: viewGame } }, async (req, reply) => {
+    const id = idParam.parse(req.params).id;
+    const body = createAnnotationBody.parse(req.body);
+    const annotation = await createAnnotation(db, req.user!.id, id, body);
+    return reply.status(201).send(annotation);
+  });
+
+  // List annotations for a game film (optionally filtered by clipId)
+  app.get("/api/v1/film/games/:id/annotations", { config: { access: viewGame } }, async (req) => {
+    const id = idParam.parse(req.params).id;
+    const query = z.object({ clipId: z.string().uuid().optional() }).parse(req.query);
+    const items = await listAnnotations(db, req.user!.id, id, query);
+    return { items };
+  });
+
+  // Get single annotation by ID
+  app.get("/api/v1/film/games/:id/annotations/:annotationId", { config: { access: viewGame } }, async (req) => {
+    const { id, annotationId } = annotParam.parse(req.params);
+    const annotation = await getAnnotation(db, req.user!.id, id, annotationId);
+    return annotation;
+  });
+
+  // Update annotation
+  app.patch("/api/v1/film/games/:id/annotations/:annotationId", { config: { access: viewGame } }, async (req) => {
+    const { id, annotationId } = annotParam.parse(req.params);
+    const body = updateAnnotationBody.parse(req.body);
+    const updated = await updateAnnotation(db, req.user!.id, id, annotationId, body);
+    return updated;
+  });
+
+  // Delete annotation
+  app.delete("/api/v1/film/games/:id/annotations/:annotationId", { config: { access: viewGame } }, async (req, reply) => {
+    const { id, annotationId } = annotParam.parse(req.params);
+    await deleteAnnotation(db, req.user!.id, id, annotationId);
+    return reply.status(204).send();
   });
 }

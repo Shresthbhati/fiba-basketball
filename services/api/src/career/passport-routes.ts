@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/index.js";
 import { AuthError } from "../identity/service.js";
+import { evaluateAndAwardMilestones, getMilestoneProgress } from "./milestones.js";
 import {
   createPassportGrant,
   listPassportGrants,
@@ -55,5 +56,16 @@ export function registerPassportRoutes(app: FastifyInstance, db: Db) {
       throw new AuthError(404, "Passport not found or link has expired");
     }
     return passport;
+  });
+
+  // 5. Get current athlete's verified achievements and milestone progression
+  app.get("/api/v1/me/achievements", authed, async (req) => {
+    return getMilestoneProgress(db, me(req));
+  });
+
+  // 6. Explicitly refresh and evaluate milestone awards
+  app.post("/api/v1/me/achievements/refresh", authed, async (req) => {
+    const result = await evaluateAndAwardMilestones(db, me(req));
+    return result;
   });
 }
