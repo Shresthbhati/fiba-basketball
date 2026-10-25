@@ -6,6 +6,7 @@ import {
   addSet, deleteSet, exerciseHistory, finishSession, getSession, listExercises, listSessions, overview, painReportedRecently,
   saveWellness, startSession, updateSet, wellnessStatus,
 } from "./service.js";
+import { registerDeviceRoutes } from "./device-routes.js";
 
 const idParam = z.object({ id: z.uuid() });
 const idOf = (req: FastifyRequest) => idParam.parse(req.params).id;
@@ -78,4 +79,6 @@ export function registerTraining(app: FastifyInstance, db: Db) {
 
   app.post("/api/v1/training/wellness", authed, async (req) => saveWellness(db, me(req), wellnessBody.parse(req.body)));
   app.get("/api/v1/training/wellness", authed, async (req) => wellnessStatus(db, me(req)));
+
+  registerDeviceRoutes(app, db);
 }

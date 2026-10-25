@@ -351,6 +351,13 @@
       "when": 1792765000000,
       "tag": "0049_pickup_recruitment_scouting_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792766000000,
+      "tag": "0050_wearable_sensor_device_integration",
+      "breakpoints": true
     }
   ]
 }

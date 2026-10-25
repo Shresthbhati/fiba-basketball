@@ -1799,3 +1799,66 @@ export const notificationDeliveryLogs = pgTable(
     index("idx_notif_delivery_user_sent").on(t.userId, t.sentAt),
   ],
 );
+
+/**
+ * WP-6.4 Wearable & Sensor Device Integration Architecture (Spec §5.4–§5.9, ADR-0015).
+ * Enables standardized multi-vendor IMU, optical gate, jump mat, and heart rate sensor telemetry ingestion.
+ */
+export const athleteDevices = pgTable(
+  "athlete_devices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    deviceManufacturer: text("device_manufacturer").notNull(), // GARMIN | POLAR | CATAPULT | VERT | WITTY | APPLE | GENERIC_IMU
+    deviceModel: text("device_model").notNull(),
+    deviceIdentifier: text("device_identifier"),
+    firmwareVersion: text("firmware_version"),
+    calibrationDate: timestamp("calibration_date", { withTimezone: true }),
+    status: text("status").notNull().default("ACTIVE"), // ACTIVE | RETIRED | DISCONNECTED
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_athlete_devices_user_status").on(t.userId, t.status),
+  ],
+);
+
+export const sensorTelemetrySessions = pgTable(
+  "sensor_telemetry_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    deviceId: uuid("device_id").notNull().references(() => athleteDevices.id, { onDelete: "cascade" }),
+    practiceId: uuid("practice_id").references(() => practiceSessions.id, { onDelete: "set null" }),
+    matchId: uuid("match_id").references(() => matches.id, { onDelete: "set null" }),
+    sessionName: text("session_name").notNull(),
+    sessionType: text("session_type").notNull(), // MATCH | PRACTICE | WORKOUT | RECOVERY | COMBINE | DRILL
+    sourceType: text("source_type").notNull().default("SENSOR"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }).notNull(),
+    durationSeconds: integer("duration_seconds").notNull(),
+    distanceMeters: doublePrecision("distance_meters"),
+    playerLoad: doublePrecision("player_load"), // Accumulated mechanical load (AU)
+    jumpCount: integer("jump_count"),
+    maxJumpHeightCm: doublePrecision("max_jump_height_cm"),
+    maxAccelerationG: doublePrecision("max_acceleration_g"),
+    maxDecelerationG: doublePrecision("max_deceleration_g"),
+    avgHeartRateBpm: integer("avg_heart_rate_bpm"),
+    maxHeartRateBpm: integer("max_heart_rate_bpm"),
+    timeInZoneSeconds: jsonb("time_in_zone_seconds").$type<{
+      z1?: number | undefined;
+      z2?: number | undefined;
+      z3?: number | undefined;
+      z4?: number | undefined;
+      z5?: number | undefined;
+    }>(),
+    samplesCount: integer("samples_count").notNull().default(0),
+    rawFormat: text("raw_format").notNull().default("JSON"), // JSON | TCX | FIT | CSV
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_sensor_sessions_user_started").on(t.userId, t.startedAt),
+    index("idx_sensor_sessions_practice").on(t.practiceId),
+    index("idx_sensor_sessions_match").on(t.matchId),
+  ],
+);
