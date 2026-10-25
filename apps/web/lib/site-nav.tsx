@@ -30,6 +30,7 @@ export function SiteNav() {
       <Link href="/free-agents">Free Agents</Link>
       <Link href="/film/search">Film</Link>
       <Link href="/playbook">Playbook</Link>
+      <Link href="/tactical">Tactical Lab</Link>
       <Link href="/practices">Practices</Link>
       <Link href="/assignments">Assignments</Link>
       <Link href="/coach">Coach</Link>
