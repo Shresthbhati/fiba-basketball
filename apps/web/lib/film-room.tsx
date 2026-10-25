@@ -5,6 +5,7 @@ import { ApiError, api } from "./api";
 import { SCORING_TYPES, fmtTime, timelineLabel, type Clip, type FilmGame, type TeamMatch, type Timeline } from "./film-types";
 import { AutoClipModal } from "./auto-clip-modal";
 import { TelestratorCanvas } from "./telestrator-canvas";
+import { MultiAngleVideoPlayer } from "./multi-angle-video-player";
 
 const msg = (e: unknown) => (e instanceof ApiError ? e.message : "Could not reach the server.");
 const TYPES = ["video/mp4", "video/webm", "video/quicktime"];
@@ -27,6 +28,7 @@ export function FilmRoom({ gameId }: { gameId: string }) {
   const [note, setNote] = useState("");
   const [showAutoClipModal, setShowAutoClipModal] = useState(false);
   const [showTelestrator, setShowTelestrator] = useState(false);
+  const [showMultiAngle, setShowMultiAngle] = useState(false);
 
   const loadGame = useCallback(async () => {
     try { setGame(await api<FilmGame>(`/film/games/${gameId}`)); }
@@ -130,9 +132,15 @@ export function FilmRoom({ gameId }: { gameId: string }) {
       {game.opponent && <p style={{ marginTop: 0 }}>vs {game.opponent}</p>}
       {error && <p role="alert" style={{ color: "#ff6b6b" }}>{error}</p>}
 
-      {game.video.status === "READY" ? (
+      showMultiAngle ? (
+        <MultiAngleVideoPlayer
+          gameId={gameId}
+          canManage={canManage}
+          primaryVideoUrl={`/api/v1/film/games/${gameId}/video?v=${game.video.bytes}`}
+        />
+      ) : game.video.status === "READY" ? (
         <video ref={video} controls preload="metadata" src={`/api/v1/film/games/${gameId}/video?v=${game.video.bytes}`} style={{ width: "100%", background: "#000", borderRadius: 8 }} aria-label="Game video" />
-      ) : <p>No video uploaded yet.</p>}
+      ) : <p>No video uploaded yet.</p>
 
       {canManage && (
         <label>
