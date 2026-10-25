@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -889,6 +891,27 @@ export function FacilityWorkspace() {
                   ${((analytics.totalRevenueCents - analytics.totalMaintenanceSpendCents) / 100).toLocaleString()}
                 </p>
               </div>
+            </div>
+          </Card>
+
+          <Card className="p-6 space-y-3 bg-muted/40 border-primary/20">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-semibold text-white">Commercial Sponsor & Demographic Intelligence</h2>
+                  <Badge variant="success" className="text-xs">
+                    k ≥ 5 Guardrails
+                  </Badge>
+                </div>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Access aggregated footfall, demographic cohorts, and partner analytics with guaranteed k-anonymity privacy protection (Spec §8.6, §24.2).
+                </p>
+              </div>
+              <Link href="/facility/sponsor">
+                <Button variant="primary" size="sm">
+                  Open Sponsor Portal
+                </Button>
+              </Link>
             </div>
           </Card>
         </div>

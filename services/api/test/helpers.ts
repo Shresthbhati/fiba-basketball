@@ -7,11 +7,17 @@ import { MemoryMailer } from "../src/identity/mailer.js";
 import type { Db } from "../src/db/index.js";
 import * as schema from "../src/db/schema.js";
 
-export async function testApp() {
+export async function testApp(opts: { rateLimitScale?: number } = {}) {
   const db = drizzle(new PGlite(), { schema });
   await migrate(db, { migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)) });
   const mailer = new MemoryMailer();
-  const app = await buildApp(db as unknown as Db, { secureCookies: false, requireVerifiedGuardianEmail: false, mailer, webBaseUrl: "http://web.test" });
+  const app = await buildApp(db as unknown as Db, {
+    secureCookies: false,
+    requireVerifiedGuardianEmail: false,
+    mailer,
+    webBaseUrl: "http://web.test",
+    ...(opts.rateLimitScale !== undefined ? { rateLimitScale: opts.rateLimitScale } : {}),
+  });
   return { app, db: db as unknown as Db, mailer };
 }
 

@@ -1862,3 +1862,66 @@ export const sensorTelemetrySessions = pgTable(
     index("idx_sensor_sessions_match").on(t.matchId),
   ],
 );
+
+
+/**
+ * Facility & Sponsor Analytics with k-Anonymity Guardrails (WP-8.6, Spec §8.6, §23, §24.2).
+ * Enables verified commercial sponsors and facility partners to access aggregated demographic and footfall trends
+ * while strictly suppressing any cohort smaller than k=5 to eliminate individual athlete de-anonymization risk.
+ */
+export const sponsorProfiles = pgTable(
+  "sponsor_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    companyName: text("company_name").notNull(),
+    contactEmail: text("contact_email").notNull(),
+    brandCategory: text("brand_category").notNull(), // APPAREL | FOOTWEAR | BEVERAGES | NUTRITION | EQUIPMENT | MEDIA | TECHNOLOGY | COMMUNITY
+    websiteUrl: text("website_url"),
+    status: text("status").notNull().default("ACTIVE"), // PENDING | ACTIVE | SUSPENDED
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("idx_sponsor_profiles_user").on(t.userId),
+    index("idx_sponsor_profiles_status").on(t.status),
+    index("idx_sponsor_profiles_category").on(t.brandCategory),
+  ],
+);
+
+export const sponsorAnalyticsGrants = pgTable(
+  "sponsor_analytics_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sponsorId: uuid("sponsor_id").notNull().references(() => sponsorProfiles.id, { onDelete: "cascade" }),
+    courtId: uuid("court_id").references(() => courts.id, { onDelete: "cascade" }),
+    competitionId: uuid("competition_id").references(() => competitions.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull().default("COURT"), // COURT | COMPETITION | GLOBAL
+    grantedBy: uuid("granted_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_sponsor_grants_sponsor").on(t.sponsorId),
+    index("idx_sponsor_grants_court").on(t.courtId),
+    index("idx_sponsor_grants_competition").on(t.competitionId),
+  ],
+);
+
+export const sponsorReportQueries = pgTable(
+  "sponsor_report_queries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sponsorId: uuid("sponsor_id").references(() => sponsorProfiles.id, { onDelete: "set null" }),
+    queriedBy: uuid("queried_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+    queryType: text("query_type").notNull(), // COURT_ANALYTICS | COMPETITION_ANALYTICS | FACILITY_OVERVIEW
+    resourceId: uuid("resource_id").notNull(),
+    kThreshold: integer("k_threshold").notNull().default(5),
+    suppressedBuckets: integer("suppressed_buckets").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_sponsor_queries_user").on(t.queriedBy, t.createdAt),
+    index("idx_sponsor_queries_resource").on(t.resourceId, t.queryType),
+  ],
+);

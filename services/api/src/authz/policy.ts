@@ -13,6 +13,7 @@ export const POLICY = {
   "moderation:review": ["MODERATOR"],
   "audit:read": [], // PLATFORM_ADMIN only (always allowed by `decide`)
   "pickup:host": ["PLAYER", "COACH", "ORGANIZER"],
+  "sponsor:analytics": ["SPONSOR", "VENUE_MANAGER", "ORGANIZER", "ORG_ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Action = keyof typeof POLICY;
