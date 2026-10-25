@@ -206,6 +206,35 @@ export const teams = pgTable("teams", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * WP-5.5 Pickup to Team/League Pathway & Direct Scouting Invites (Spec §8.4, §11.4).
+ * Connects pickup runs with team rosters via coach tryout / roster recruitment invitations.
+ */
+export const pickupRecruitmentInvites = pgTable(
+  "pickup_recruitment_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pickupGameId: uuid("pickup_game_id").notNull().references(() => pickupGames.id, { onDelete: "cascade" }),
+    coachId: uuid("coach_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    athleteId: uuid("athlete_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("PENDING"), // PENDING | ACCEPTED | DECLINED | EXPIRED
+    inviteType: text("invite_type").notNull().default("TRYOUT"), // TRYOUT | ROSTER_SPOT | DEVELOPMENT_SQUAD
+    message: text("message").notNull(),
+    tryoutDate: timestamp("tryout_date", { withTimezone: true }),
+    location: text("location"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("pickup_recruitment_athlete_idx").on(t.athleteId, t.status),
+    index("pickup_recruitment_coach_idx").on(t.coachId),
+    index("pickup_recruitment_game_idx").on(t.pickupGameId),
+    index("pickup_recruitment_team_idx").on(t.teamId),
+  ],
+);
+
 export const competitions = pgTable("competitions", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),

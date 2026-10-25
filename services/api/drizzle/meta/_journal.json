@@ -344,6 +344,13 @@
       "when": 1792764000000,
       "tag": "0048_notification_preferences_vapid_push",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792765000000,
+      "tag": "0049_pickup_recruitment_scouting_invites",
+      "breakpoints": true
     }
   ]
 }
