@@ -444,6 +444,26 @@ export const filmGames = pgTable(
   (t) => [index("film_games_team_idx").on(t.teamId)],
 );
 
+/** Multi-Angle Game Film Streams (Spec §6.1, §6.3, §18.2, WP-3.1). Broadcast, Baseline, End-Zone, and Tactical high angles with time offset synchronization. */
+export const filmGameAngles = pgTable(
+  "film_game_angles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gameId: uuid("game_id").notNull().references(() => filmGames.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    angleType: text("angle_type").notNull(), // BROADCAST | BASELINE | ENDZONE | TACTICAL_HIGH | COURT_SIDE
+    isPrimary: boolean("is_primary").notNull().default(false),
+    timeOffsetMs: integer("time_offset_ms").notNull().default(0),
+    videoStatus: text("video_status").notNull().default("NONE"), // NONE | UPLOADING | READY | ERROR
+    videoKey: text("video_key"),
+    videoType: text("video_type"),
+    videoBytes: integer("video_bytes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("film_game_angles_game_idx").on(t.gameId)],
+);
+
 export const filmClips = pgTable(
   "film_clips",
   {
