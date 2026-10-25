@@ -45,6 +45,7 @@ import { registerRefereeRoutes } from "./competition/referee-routes.js";
 import { registerPrivacyRoutes } from "./privacy/index.js";
 import { registerSponsorRoutes } from "./facility/index.js";
 import { registerBillingRoutes } from "./billing/index.js";
+import { registerTacticalRoutes } from "./tactical/index.js";
 import { LocalDiskStorage, type MediaStorage } from "./media/storage.js";
 
 export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimit?: boolean; allowedOrigins?: string[]; mailer?: Mailer; webBaseUrl?: string; rateLimitScale?: number; requireVerifiedGuardianEmail?: boolean; storage?: MediaStorage; maxVideoBytes?: number; logger?: boolean; logStream?: { write(msg: string): void } } = {}): Promise<FastifyInstance> {
@@ -119,6 +120,7 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerPrivacyRoutes(app, db);
   registerSponsorRoutes(app, db);
   registerBillingRoutes(app, db);
+  registerTacticalRoutes(app, db);
 
   // Liveness: the process is up. Readiness: it can reach the database (use this for load balancer checks).
   app.get("/health", async () => ({ status: "UP" }));

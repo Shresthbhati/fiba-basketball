@@ -1,4 +1,4 @@
-import { boolean, date, doublePrecision, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { boolean, date, doublePrecision, index, integer, jsonb, numeric, pgTable, primaryKey, real, text, timestamp, unique, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -1985,5 +1985,119 @@ export const paymentTransactions = pgTable(
     uniqueIndex("idx_payment_transactions_provider").on(t.providerPaymentIntentId),
     index("idx_payment_transactions_customer").on(t.customerId),
     index("idx_payment_transactions_resource").on(t.resourceId),
+  ],
+);
+
+
+/** Tactical Candidate Events & Human Review Queue (WP-7.1, Spec §7.2, §12, ADR-0016) */
+export const tacticalCandidateEvents = pgTable(
+  "tactical_candidate_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gameId: uuid("game_id").notNull().references(() => filmGames.id, { onDelete: "cascade" }),
+    clipId: uuid("clip_id").references(() => filmClips.id, { onDelete: "set null" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    eventType: text("event_type").notNull(), // PICK_AND_ROLL | POP | SCREEN_AWAY | DRIVE_AND_KICK | CUT_TO_RIM | ISOLATION | POST_UP | TRANSITION_BREAK
+    timestampSeconds: real("timestamp_seconds").notNull(),
+    courtCoordinates: jsonb("court_coordinates").$type<{ x: number; y: number; endX?: number | undefined; endY?: number | undefined }>().notNull(),
+    involvedPlayerIds: jsonb("involved_player_ids").$type<string[]>().notNull().default([]),
+    confidenceScore: real("confidence_score").notNull(),
+    status: text("status").notNull().default("CANDIDATE"), // CANDIDATE | CONFIRMED | REJECTED | ADJUSTED
+    reviewedById: uuid("reviewed_by_id").references(() => users.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewNotes: text("review_notes"),
+    modelVersion: text("model_version").notNull().default("v1.0.0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("tactical_candidate_game_idx").on(t.gameId),
+    index("tactical_candidate_team_idx").on(t.teamId),
+    index("tactical_candidate_status_idx").on(t.status),
+    index("tactical_candidate_event_type_idx").on(t.eventType),
+  ],
+);
+
+/** Play Diagram Vector Embeddings & Concept Similarity (WP-7.2, Spec §7.2, §12, ADR-0016) */
+export const playSimilarityEmbeddings = pgTable(
+  "play_similarity_embeddings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playId: uuid("play_id").notNull().references(() => tacticalPlays.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    embeddingVector: jsonb("embedding_vector").$type<number[]>().notNull(),
+    spatialFeatures: jsonb("spatial_features").$type<{
+      primaryAction: string;
+      startQuadrant: string;
+      endQuadrant: string;
+      passCount: number;
+      screenCount: number;
+      trajectoryLengthMeters: number;
+    }>().notNull(),
+    modelVersion: text("model_version").notNull().default("v1.0.0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("play_similarity_play_idx").on(t.playId),
+    index("play_similarity_team_idx").on(t.teamId),
+  ],
+);
+
+/** Level 3 Rule-Based Scenario Simulator (WP-7.3, Spec §7.3, §12, ADR-0007, ADR-0016) */
+export const scenarioSimulations = pgTable(
+  "scenario_simulations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    playId: uuid("play_id").references(() => tacticalPlays.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    coverageType: text("coverage_type").notNull(), // DROP | SWITCH | BLITZ_TRAP | HEDGE_AND_RECOVER | ICE_WEAK | HELP_AND_RECOVER
+    simulationLevel: integer("simulation_level").notNull().default(3),
+    offensiveSetup: jsonb("offensive_setup").$type<Record<string, unknown>>().notNull(),
+    defensiveResponse: jsonb("defensive_response").$type<Record<string, unknown>>().notNull(),
+    coverageMetrics: jsonb("coverage_metrics").$type<{
+      spaceAdvantageScore: number;
+      contestedShotRisk: number;
+      openLaneCount: number;
+      secondaryHelpDelaySec: number;
+    }>().notNull(),
+    tacticalAnalysis: text("tactical_analysis").notNull(),
+    disclaimer: text("disclaimer").notNull().default("Level 3 Rule-Based Scenario Simulation — tactical schematic illustration, not an empirical outcome prediction."),
+    createdById: uuid("created_by_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("scenario_simulation_team_idx").on(t.teamId),
+    index("scenario_simulation_play_idx").on(t.playId),
+  ],
+);
+
+/** Model Registry & Evaluation Dashboard (WP-7.4, Spec §12, ADR-0016) */
+export const tacticalModelRegistry = pgTable(
+  "tactical_model_registry",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    modelVersion: text("model_version").notNull().unique(),
+    modelType: text("model_type").notNull(), // CV_TRACKING | TACTICAL_CANDIDATE | PLAY_EMBEDDING | COVERAGE_SIMULATOR
+    benchmarkDataset: text("benchmark_dataset").notNull(),
+    metrics: jsonb("metrics").$type<{
+      accuracy: number;
+      f1Score: number;
+      precision: number;
+      recall: number;
+      sampleSize: number;
+    }>().notNull(),
+    status: text("status").notNull().default("CANDIDATE"), // CANDIDATE | ACTIVE | DEPRECATED | ROLLED_BACK
+    activeSince: timestamp("active_since", { withTimezone: true }),
+    rolledBackAt: timestamp("rolled_back_at", { withTimezone: true }),
+    rollbackReason: text("rollback_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("model_registry_version_idx").on(t.modelVersion),
+    index("model_registry_type_idx").on(t.modelType),
+    index("model_registry_status_idx").on(t.status),
   ],
 );
