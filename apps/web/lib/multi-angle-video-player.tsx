@@ -241,8 +241,11 @@ export function MultiAngleVideoPlayer({
           )}
         </div>
 
-        {/* View Mode Controls */}
+        {/* View Mode Controls & Playback State */}
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ fontSize: "0.75rem", color: isPlaying ? "#4ade80" : "var(--muted, #8a8a98)", marginRight: "0.25rem" }}>
+            {isPlaying ? "▶" : "⏸"} {Math.floor(currentTime / 60)}:{String(Math.floor(currentTime % 60)).padStart(2, "0")}
+          </span>
           <span style={{ fontSize: "0.8rem", color: "var(--muted, #8a8a98)" }}>View:</span>
           <button
             type="button"
@@ -498,7 +501,7 @@ export function MultiAngleVideoPlayer({
                 </label>
                 <select
                   value={newAngleType}
-                  onChange={(e) => setNewAngleType(e.target.value as any)}
+                  onChange={(e) => setNewAngleType(e.target.value as "BROADCAST" | "BASELINE" | "ENDZONE" | "TACTICAL_HIGH" | "COURT_SIDE")}
                   style={{
                     width: "100%",
                     padding: "0.5rem",

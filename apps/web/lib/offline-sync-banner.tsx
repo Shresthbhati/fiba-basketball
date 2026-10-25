@@ -13,13 +13,10 @@ export function OfflineSyncBanner() {
     triggerSync,
   } = useOfflineSync();
 
-  const [dismissedOnlineNotice, setDismissedOnlineNotice] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
-  // If online, no pending items, and online notice dismissed or not needed: show nothing
+  // If online and no pending items: show nothing
   if (isOnline && totalPending === 0) {
-    if (dismissedOnlineNotice) return null;
-    // Don't clutter unless user previously had an issue
     return null;
   }
 

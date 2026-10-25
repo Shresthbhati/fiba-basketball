@@ -13,7 +13,6 @@ export interface PoolPlayManagerProps {
 }
 
 export function PoolPlayManager({
-  competitionId: _competitionId,
   competitionName,
   groupStandings,
   matches,
