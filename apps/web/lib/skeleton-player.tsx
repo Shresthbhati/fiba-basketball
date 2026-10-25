@@ -22,7 +22,7 @@ export interface KinematicFrame {
 }
 
 export interface SkeletonPlayerProps {
-  protocol: "BODYWEIGHT_SQUAT" | "COUNTERMOVEMENT_JUMP";
+  protocol: "BODYWEIGHT_SQUAT" | "COUNTERMOVEMENT_JUMP" | "SHOOTING_MECHANICS" | "LANDING_STABILITY";
   frames?: KinematicFrame[];
   videoSrc?: string;
   onFrameChange?: (frame: KinematicFrame) => void;
@@ -47,7 +47,7 @@ export const SKELETON_CONNECTIONS: Array<[number, number]> = [
 ];
 
 // Generates a deterministic sequence of 30 frames for testing / preview
-export function generateSampleFrames(protocol: "BODYWEIGHT_SQUAT" | "COUNTERMOVEMENT_JUMP"): KinematicFrame[] {
+export function generateSampleFrames(protocol: "BODYWEIGHT_SQUAT" | "COUNTERMOVEMENT_JUMP" | "SHOOTING_MECHANICS" | "LANDING_STABILITY"): KinematicFrame[] {
   const frames: KinematicFrame[] = [];
   const totalFrames = 30;
 
