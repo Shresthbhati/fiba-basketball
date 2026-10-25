@@ -10,6 +10,11 @@ export const users = pgTable("users", {
   emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   // Opt-out for notification emails (see notifications/email.ts). Under-18 accounts are never emailed regardless.
   emailNotifications: boolean("email_notifications").notNull().default(true),
+  // TOTP MFA (RFC 6238) for platform admins & user opt-in (Spec §1.1, §2.2, WP-1.1)
+  totpSecret: text("totp_secret"),
+  totpEnabled: boolean("totp_enabled").notNull().default(false),
+  totpRecoveryCodes: text("totp_recovery_codes"),
+  totpVerifiedAt: timestamp("totp_verified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -18,6 +23,7 @@ export const sessions = pgTable(
   {
     tokenHash: text("token_hash").primaryKey(),
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    isMfaVerified: boolean("is_mfa_verified").notNull().default(false),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

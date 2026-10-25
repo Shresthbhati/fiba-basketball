@@ -316,6 +316,13 @@
       "when": 1792760000000,
       "tag": "0044_verified_achievements_crypto_signatures",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792761000000,
+      "tag": "0045_admin_totp_mfa",
+      "breakpoints": true
     }
   ]
 }

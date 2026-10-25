@@ -6,7 +6,20 @@ import { permissionsFor } from "../authz/service.js";
 import type { Mailer } from "./mailer.js";
 import { confirmPasswordReset, requestPasswordReset, sendVerification, verifyEmail } from "./tokens.js";
 import type { Db } from "../db/index.js";
-import { AuthError, SESSION_TTL_MS, login, logout, signup, userForToken, type PublicUser } from "./service.js";
+import {
+  AuthError,
+  SESSION_TTL_MS,
+  completeMfaLogin,
+  disableTotp,
+  enableTotp,
+  getTotpStatus,
+  login,
+  logout,
+  setupTotp,
+  signup,
+  userForToken,
+  type PublicUser,
+} from "./service.js";
 
 const safeHost = (origin: string) => { try { return new URL(origin).host; } catch { return null; } };
 
@@ -19,6 +32,17 @@ const signupBody = z.object({
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 const loginBody = z.object({ email: z.string().min(1).max(320), password: z.string().min(1).max(200) });
+const totpChallengeBody = z.object({
+  challengeToken: z.string().min(10),
+  code: z.string().min(6).max(20),
+});
+const totpVerifyBody = z.object({
+  code: z.string().min(6).max(20),
+});
+const totpDisableBody = z.object({
+  password: z.string().min(1).max(200),
+  code: z.string().min(6).max(20),
+});
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -52,6 +76,7 @@ export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCoo
 
   const scale = Math.max(1, opts.rateLimitScale ?? 1); // production keeps 1; automated browser tests raise it
   const authLimit = { config: { rateLimit: { max: 10 * scale, timeWindow: "1 minute" } } };
+  const strict = { config: { rateLimit: { max: 5 * scale, timeWindow: "1 minute" } } };
 
   app.post("/api/v1/auth/signup", { ...authLimit, config: { ...authLimit.config, access: "public" } }, async (req, reply) => {
     const body = signupBody.parse(req.body);
@@ -63,9 +88,46 @@ export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCoo
 
   app.post("/api/v1/auth/login", { ...authLimit, config: { ...authLimit.config, access: "public" } }, async (req, reply) => {
     const body = loginBody.parse(req.body);
-    const { user, token } = await login(db, body.email, body.password);
+    const result = await login(db, body.email, body.password);
+    if (result.requiresTotp) {
+      return reply.status(200).send({
+        requiresTotp: true,
+        challengeToken: result.challengeToken,
+        user: result.user,
+      });
+    }
+    setCookie(reply, result.token!);
+    return result.user;
+  });
+
+  // Second-factor TOTP login verification (Spec §1.1, §2.2, WP-1.1)
+  app.post("/api/v1/auth/totp/challenge", { ...authLimit, config: { ...authLimit.config, access: "public" } }, async (req, reply) => {
+    const body = totpChallengeBody.parse(req.body);
+    const { user, token } = await completeMfaLogin(db, body.challengeToken, body.code);
     setCookie(reply, token);
     return user;
+  });
+
+  // TOTP Status check
+  app.get("/api/v1/auth/totp/status", { config: { access: "authenticated" } }, async (req) => {
+    return getTotpStatus(db, req.user!.id);
+  });
+
+  // Initiate TOTP setup (returns secret, otpauth URI, and emergency recovery codes)
+  app.post("/api/v1/auth/totp/setup", { ...strict, config: { ...strict.config, access: "authenticated" } }, async (req) => {
+    return setupTotp(db, req.user!.id);
+  });
+
+  // Confirm and activate TOTP with a valid 6-digit code
+  app.post("/api/v1/auth/totp/enable", { ...authLimit, config: { ...authLimit.config, access: "authenticated" } }, async (req) => {
+    const body = totpVerifyBody.parse(req.body);
+    return enableTotp(db, req.user!.id, body.code);
+  });
+
+  // Disable TOTP with password confirmation and current code/recovery code
+  app.post("/api/v1/auth/totp/disable", { ...strict, config: { ...strict.config, access: "authenticated" } }, async (req) => {
+    const body = totpDisableBody.parse(req.body);
+    return disableTotp(db, req.user!.id, body.password, body.code);
   });
 
   app.post("/api/v1/auth/logout", { config: { access: "public" } }, async (req: FastifyRequest, reply) => {
@@ -76,7 +138,6 @@ export function registerIdentity(app: FastifyInstance, db: Db, opts: { secureCoo
   });
 
   const tokenBody = z.object({ token: z.string().min(20).max(200) });
-  const strict = { config: { rateLimit: { max: 5 * scale, timeWindow: "1 minute" } } };
 
   app.post("/api/v1/auth/password-reset/request", { ...strict, config: { ...strict.config, access: "public" } }, async (req, reply) => {
     const { email } = z.object({ email: z.string().min(3).max(320) }).parse(req.body);
