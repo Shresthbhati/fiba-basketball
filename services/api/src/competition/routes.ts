@@ -4,7 +4,7 @@ import { z } from "zod";
 import { can } from "../authz/service.js";
 import type { Db } from "../db/index.js";
 import { AuthError } from "../identity/service.js";
-import { getCompetitionEmbedSummary } from "./embed.js";
+import { getCompetitionEmbedSummary, getMatchEmbedScoreboard } from "./embed.js";
 import { validateScheduleConflicts } from "./schedule.js";
 import {
   applyAutoSchedule, applyDelay, competitionGroupStandings, competitionStandings, createCompetition, listCompetitions, createTeam, generateSchedule,
@@ -227,5 +227,10 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
   app.get("/api/v1/embed/competitions/:id/schedule", { config: { access: "public" } }, async (req) => {
     const summary = await getCompetitionEmbedSummary(db, compId(req));
     return { competition: summary.competition, schedule: summary.schedule, stats: summary.stats };
+  });
+
+  app.get("/api/v1/embed/competitions/:id/matches/:matchId", { config: { access: "public" } }, async (req) => {
+    const params = z.object({ id: z.uuid(), matchId: z.uuid() }).parse(req.params);
+    return getMatchEmbedScoreboard(db, params.id, params.matchId);
   });
 }
