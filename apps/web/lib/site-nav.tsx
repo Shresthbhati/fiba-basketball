@@ -48,6 +48,7 @@ export function SiteNav() {
             <Link href="/notifications" aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}>Notifications{unread > 0 ? ` (${unread > 99 ? "99+" : unread})` : ""}</Link>
             <Link href="/safety">Safety</Link>
             <Link href="/privacy">Privacy</Link>
+            <Link href="/billing">Billing</Link>
             <span>{user.displayName}</span>
             <button className="secondary" style={{ minHeight: 36, padding: "4px 12px" }} onClick={async () => {
               await api("/auth/logout", { method: "POST" });
