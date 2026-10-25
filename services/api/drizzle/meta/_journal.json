@@ -365,6 +365,13 @@
       "when": 1792767000000,
       "tag": "0051_sponsor_analytics_k_anonymity",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1792768000000,
+      "tag": "0052_billing_and_payment_provider",
+      "breakpoints": true
     }
   ]
 }

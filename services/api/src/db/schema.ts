@@ -1925,3 +1925,65 @@ export const sponsorReportQueries = pgTable(
     index("idx_sponsor_queries_resource").on(t.resourceId, t.queryType),
   ],
 );
+
+
+/**
+ * Billing & Payment Provider Integration (WP-8.5, Master Spec §8.5, ADR-0010).
+ * Implements tokenized hosted checkout, subscriptions, and reservation fee payments.
+ * ZERO raw credit card data or PAN/CVV is stored on Court IQ servers (PCI-DSS compliant).
+ */
+export const billingCustomers = pgTable(
+  "billing_customers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    providerCustomerId: text("provider_customer_id").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("idx_billing_customers_user").on(t.userId),
+    uniqueIndex("idx_billing_customers_provider").on(t.providerCustomerId),
+  ],
+);
+
+export const billingSubscriptions = pgTable(
+  "billing_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    customerId: uuid("customer_id").notNull().references(() => billingCustomers.id, { onDelete: "cascade" }),
+    planId: text("plan_id").notNull(), // PRO_ATHLETE | COACH_PLUS | VENUE_ENTERPRISE
+    status: text("status").notNull().default("ACTIVE"), // ACTIVE | TRIALING | PAST_DUE | CANCELED | INCOMPLETE
+    currentPeriodStart: timestamp("current_period_start", { withTimezone: true }).notNull(),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }).notNull(),
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_billing_subscriptions_customer").on(t.customerId),
+    index("idx_billing_subscriptions_status").on(t.status),
+  ],
+);
+
+export const paymentTransactions = pgTable(
+  "payment_transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    customerId: uuid("customer_id").notNull().references(() => billingCustomers.id, { onDelete: "cascade" }),
+    providerPaymentIntentId: text("provider_payment_intent_id").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    purpose: text("purpose").notNull(), // COURT_RESERVATION | COMPETITION_ENTRY | SUBSCRIPTION | OTHER
+    resourceId: uuid("resource_id"),
+    status: text("status").notNull().default("PENDING"), // PENDING | SUCCEEDED | FAILED | REFUNDED
+    receiptUrl: text("receipt_url"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("idx_payment_transactions_provider").on(t.providerPaymentIntentId),
+    index("idx_payment_transactions_customer").on(t.customerId),
+    index("idx_payment_transactions_resource").on(t.resourceId),
+  ],
+);
