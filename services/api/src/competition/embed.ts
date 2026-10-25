@@ -2,6 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import type { Db } from "../db/index.js";
 import { competitions, matches } from "../db/schema.js";
 import { AuthError } from "../identity/service.js";
+import { matchState } from "../match/events.js";
 import { competitionStandings, listTeams } from "./service.js";
 
 export interface EmbedTeamDto {
@@ -205,5 +206,96 @@ export async function getCompetitionEmbedSummary(db: Db, competitionId: string):
     standings: standingsData,
     bracket: bracketData,
     schedule: scheduleData,
+  };
+}
+
+export interface EmbedMatchScoreboardDto {
+  match: {
+    id: string;
+    competitionId: string;
+    competitionName: string;
+    round: number;
+    slot: number;
+    stage: string;
+    groupName: string | null;
+    courtName: string | null;
+    scheduledAt: string | null;
+    state: string;
+    isBye: boolean;
+  };
+  competition: {
+    id: string;
+    name: string;
+    format: string;
+    status: string;
+  };
+  homeTeam: EmbedTeamDto | null;
+  awayTeam: EmbedTeamDto | null;
+  score: {
+    homeScore: number;
+    awayScore: number;
+    period: number;
+    clockSeconds: number | null;
+    teamFouls: Record<number, { home: number; away: number }>;
+    timeouts: { home: number; away: number };
+    periodScores: Array<{ period: number; label: string; home: number; away: number }>;
+    currentRun: { side: "home" | "away"; points: number; unanswered: boolean } | null;
+    lastScoringSide: "home" | "away" | null;
+    gameEnded: boolean;
+    version: number;
+  };
+  streamUrl: string;
+}
+
+export async function getMatchEmbedScoreboard(
+  db: Db,
+  competitionId: string,
+  matchId: string
+): Promise<EmbedMatchScoreboardDto> {
+  const [comp] = await db.select().from(competitions).where(eq(competitions.id, competitionId));
+  if (!comp || comp.status === "DRAFT") {
+    // Negative authZ per ADR-0010: drafts and unknown IDs return 404
+    throw new AuthError(404, "Not Found");
+  }
+
+  const [m] = await db.select().from(matches).where(eq(matches.id, matchId));
+  if (!m || m.competitionId !== competitionId) {
+    throw new AuthError(404, "Not Found");
+  }
+
+  const teamList = await listTeams(db, competitionId);
+  const teamMap = new Map<string, EmbedTeamDto>(
+    teamList.map((t) => [t.id, { id: t.id, name: t.name, seed: t.seed }])
+  );
+
+  const homeTeam = m.homeTeamId ? teamMap.get(m.homeTeamId) ?? null : null;
+  const awayTeam = m.awayTeamId ? teamMap.get(m.awayTeamId) ?? null : null;
+
+  const scoreState = await matchState(db, matchId);
+
+  return {
+    match: {
+      id: m.id,
+      competitionId: m.competitionId,
+      competitionName: comp.name,
+      round: m.round,
+      slot: m.slot,
+      stage: m.stage,
+      groupName: m.groupName ?? null,
+      courtName: m.courtName ?? null,
+      scheduledAt: m.scheduledAt ? m.scheduledAt.toISOString() : null,
+      state: m.state,
+      isBye: m.isBye,
+    },
+    competition: {
+      id: comp.id,
+      name: comp.name,
+      format: comp.format,
+      status: comp.status,
+    },
+    homeTeam,
+    awayTeam,
+    score: scoreState,
+    streamUrl: `/api/v1/streams/matches/${m.id}`,
   };
 }
