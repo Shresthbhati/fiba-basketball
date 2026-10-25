@@ -3,6 +3,7 @@ import Link from "next/link";
 import React, { useMemo, useState } from "react";
 import { Badge, Button, Card, VerificationBadge, type VerificationStatus } from "@courtiq/design-system";
 import { CourtActivityPanel } from "./court-activity-panel";
+import { CourtPhotoGallery } from "./court-photo-gallery";
 
 export interface PublicCourt {
   id: string;
@@ -495,6 +496,12 @@ export function CourtMap({
             )}
 
             <CourtActivityPanel courtId={selectedCourt.id} courtName={selectedCourt.name} />
+
+            <CourtPhotoGallery
+              courtId={selectedCourt.id}
+              courtName={selectedCourt.name}
+              initialStatus={selectedCourt.verificationStatus}
+            />
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
               <Link

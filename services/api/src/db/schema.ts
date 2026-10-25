@@ -74,6 +74,40 @@ export const courtReports = pgTable("court_reports", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const courtPhotos = pgTable(
+  "court_photos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courtId: uuid("court_id").notNull().references(() => courts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    caption: text("caption"),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    status: text("status").notNull().default("APPROVED"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("court_photos_court_idx").on(t.courtId), index("court_photos_user_idx").on(t.userId)],
+);
+
+export const courtVerifications = pgTable(
+  "court_verifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courtId: uuid("court_id").notNull().references(() => courts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    confirmedSurface: text("confirmed_surface"),
+    confirmedHoops: integer("confirmed_hoops"),
+    confirmedLit: boolean("confirmed_lit"),
+    confirmedIndoor: boolean("confirmed_indoor"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_court_verifications_user_court").on(t.courtId, t.userId),
+    index("idx_court_verifications_court").on(t.courtId),
+  ],
+);
+
 /** Basketball Communities & Squad Hubs (WP-5.2, Master Spec §8.3). */
 export const communities = pgTable(
   "communities",
