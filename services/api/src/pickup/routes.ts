@@ -6,6 +6,7 @@ import { hasConsent } from "../consent/service.js";
 import { AuthError } from "../identity/service.js";
 import { cancelSeries, createSeries, mySeries } from "./series.js";
 import { cancelGame, cancelRsvp, checkIn, confirmComplete, createGame, getGame, rsvp, searchGames } from "./service.js";
+import { registerPickupRecruitment } from "./recruitment-routes.js";
 
 const idParam = z.object({ id: z.uuid() });
 const newGame = z.object({
@@ -65,4 +66,6 @@ export function registerPickup(app: FastifyInstance, db: Db) {
     await cancelGame(db, gameId(req), req.user!.id);
     return reply.status(204).send();
   });
+
+  registerPickupRecruitment(app, db);
 }

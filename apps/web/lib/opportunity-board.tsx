@@ -14,6 +14,7 @@ import {
   Select,
 } from "@courtiq/design-system";
 import { api } from "./api";
+import { RecruitmentInvitesPanel } from "./recruitment-invites-panel";
 
 export interface OpportunityItem {
   id: string;
@@ -64,7 +65,7 @@ export interface MyApplicationItem {
 
 export function OpportunityBoard() {
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"browse" | "my-apps">("browse");
+  const [activeTab, setActiveTab] = useState<"browse" | "my-apps" | "pickup-invites">("browse");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [cityFilter, setCityFilter] = useState<string>("");
   const [selectedOpp, setSelectedOpp] = useState<OpportunityItem | null>(null);
@@ -167,7 +168,7 @@ export function OpportunityBoard() {
             Discover verified team tryouts, prospect showcases, college recruiting combines, and open runs.
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Button
             variant={activeTab === "browse" ? "primary" : "secondary"}
             onClick={() => setActiveTab("browse")}
@@ -179,6 +180,12 @@ export function OpportunityBoard() {
             onClick={() => setActiveTab("my-apps")}
           >
             My Applications
+          </Button>
+          <Button
+            variant={activeTab === "pickup-invites" ? "primary" : "secondary"}
+            onClick={() => setActiveTab("pickup-invites")}
+          >
+            Pickup Scouting Invites
           </Button>
         </div>
       </div>
@@ -327,6 +334,8 @@ export function OpportunityBoard() {
           )}
         </div>
       )}
+
+      {activeTab === "pickup-invites" && <RecruitmentInvitesPanel />}
 
       {/* Application Dialog Modal */}
       {selectedOpp && (

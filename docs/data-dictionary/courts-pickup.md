@@ -41,3 +41,33 @@ under-18 accounts cannot host or join public games until guardian consent exists
   - `GET /api/v1/courts/:id/verifications` (verification consensus breakdown, counts, and recent entries)
   - `POST /api/v1/courts/:id/confirm-attributes` (submit or update user attribute verification; auto-promotes to `COMMUNITY_CONFIRMED` upon reaching threshold)
 
+
+## Pickup to Team/League Pathway & Direct Scouting Invites (Spec §8.4, §11.4, WP-5.5)
+- `pickup_recruitment_invites`:
+  - `id`: UUIDv7 PK
+  - `pickup_game_id`: UUID references `pickup_games.id` (cascades on delete)
+  - `coach_id`: UUID references `users.id` (cascades on delete)
+  - `athlete_id`: UUID references `users.id` (cascades on delete)
+  - `team_id`: UUID references `teams.id` (cascades on delete)
+  - `status`: `PENDING | ACCEPTED | DECLINED | EXPIRED` (default `PENDING`)
+  - `invite_type`: `TRYOUT | ROSTER_SPOT | DEVELOPMENT_SQUAD` (default `TRYOUT`)
+  - `message`: text (scouting note and tryout instructions, min 5 chars)
+  - `tryout_date`: timestamp with timezone (optional scheduled date for tryout session)
+  - `location`: text (optional facility name or address)
+  - `expires_at`: timestamp with timezone (default 14 days, max 30 days)
+  - `responded_at`: timestamp with timezone (recorded on accept or decline)
+  - `created_at`: timestamp with timezone
+- Indexes: `(athlete_id, status)`, `(coach_id)`, `(pickup_game_id)`, `(team_id)`.
+- Pathway Mechanics:
+  - Coaches, team managers, and scouts watching or participating in pickup games can scout participants who had confirmed attendance in the run.
+  - Negative AuthZ (ADR-0010): Only authorized coaches/managers of the recruiting team can issue invitations (unauthorized callers get 404). Outsiders cannot read athlete invitations or team outgoing queues (returns 404).
+  - Mutual Consent: Direct invitations require explicit acceptance by the athlete.
+  - Automatic Roster Enrolment: Upon acceptance, the athlete is automatically inserted into `role_assignments` with role `PLAYER`, resourceType `team`, and resourceId `team_id`, with notification and audit logging.
+- API Endpoints:
+  - `POST /api/v1/pickup/:id/scout-invites` (coach sends recruitment invite to a confirmed pickup participant)
+  - `GET /api/v1/pickup/:id/scouting-roster` (lists participants with team invite statuses for coaching staff)
+  - `GET /api/v1/recruitment/invites` (athlete inbox for incoming scouting invitations, filterable by status)
+  - `GET /api/v1/recruitment/invites/:id` (single invite details: athlete or coach only)
+  - `POST /api/v1/recruitment/invites/:id/accept` (athlete accepts invite; automatically enrols player onto team roster)
+  - `POST /api/v1/recruitment/invites/:id/decline` (athlete declines invite)
+  - `GET /api/v1/teams/:teamId/recruitment-invites` (lists outgoing recruitment invites for team coaches)
