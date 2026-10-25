@@ -2,14 +2,12 @@
 
 import React from "react";
 import { VerificationBadge, SourceBadge } from "@courtiq/design-system";
+import {
+  VerifiedAchievementBadge,
+  type VerifiedAchievementItem,
+} from "./verified-achievement-badge";
 
-export interface PassportAchievement {
-  id: string;
-  title: string;
-  category: string;
-  issuer: string;
-  verifiedAt: string;
-}
+export type PassportAchievement = VerifiedAchievementItem;
 
 export interface PassportLine {
   points: number;
@@ -147,24 +145,9 @@ export const PassportView: React.FC<{ data: PassportData }> = ({ data }) => {
           <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, color: "#facc15" }}>
             Verified Honors & Achievements ({achievements.length})
           </h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
             {achievements.map((ach) => (
-              <div
-                key={ach.id}
-                data-testid={`achievement-${ach.id}`}
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: 8,
-                  backgroundColor: "#161822",
-                  border: "1px solid #374151",
-                }}
-              >
-                <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>{ach.title}</div>
-                <div style={{ fontSize: "0.8rem", color: "#9ca3af", marginTop: 2 }}>{ach.issuer}</div>
-                <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 4 }}>
-                  Verified: {new Date(ach.verifiedAt).toLocaleDateString()}
-                </div>
-              </div>
+              <VerifiedAchievementBadge key={ach.id} achievement={ach} />
             ))}
           </div>
         </section>

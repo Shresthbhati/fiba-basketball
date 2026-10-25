@@ -1,6 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
+import {
+  VerifiedAchievementBadge,
+  type VerifiedAchievementItem,
+} from "./verified-achievement-badge";
 
 export interface MilestoneProgressItem {
   key: string;
@@ -15,13 +19,7 @@ export interface MilestoneProgressItem {
   unlockedAt: string | null;
 }
 
-export interface VerifiedAchievementItem {
-  id: string;
-  title: string;
-  category: string;
-  issuer: string;
-  verifiedAt: string;
-}
+export type { VerifiedAchievementItem };
 
 export interface CareerMilestonesProps {
   achievements: VerifiedAchievementItem[];
@@ -133,24 +131,9 @@ export function CareerMilestones({
           <h3 style={{ fontSize: "13px", fontWeight: 700, textTransform: "uppercase", color: "#fbbf24", margin: "0 0 10px 0" }}>
             ⭐ Verified Awards & Tournament Honors
           </h3>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "10px" }}>
             {achievements.map((a) => (
-              <div
-                key={a.id}
-                style={{
-                  background: "rgba(251, 191, 36, 0.1)",
-                  border: "1px solid rgba(251, 191, 36, 0.3)",
-                  borderRadius: "6px",
-                  padding: "6px 12px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <span style={{ fontSize: "14px" }}>🎖️</span>
-                <strong style={{ fontSize: "12px", color: "#fef08a" }}>{a.title}</strong>
-                <span style={{ fontSize: "11px", color: "#94a3b8" }}>({a.issuer})</span>
-              </div>
+              <VerifiedAchievementBadge key={a.id} achievement={a} compact={true} />
             ))}
           </div>
         </section>

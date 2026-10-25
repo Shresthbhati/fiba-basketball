@@ -116,9 +116,12 @@ export async function getPublicPassport(db: Db, token: string) {
       category: verifiedAchievements.category,
       issuer: verifiedAchievements.issuer,
       verifiedAt: verifiedAchievements.verifiedAt,
+      signature: verifiedAchievements.signature,
+      evidenceUrl: verifiedAchievements.evidenceUrl,
+      isRevoked: verifiedAchievements.isRevoked,
     })
     .from(verifiedAchievements)
-    .where(eq(verifiedAchievements.userId, grant.userId))
+    .where(and(eq(verifiedAchievements.userId, grant.userId), eq(verifiedAchievements.isRevoked, false)))
     .orderBy(desc(verifiedAchievements.verifiedAt));
 
   // Fetch verified biometrics if permitted by grant
