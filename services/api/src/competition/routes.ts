@@ -7,9 +7,9 @@ import { AuthError } from "../identity/service.js";
 import { getCompetitionEmbedSummary } from "./embed.js";
 import { validateScheduleConflicts } from "./schedule.js";
 import {
-  applyAutoSchedule, applyDelay, competitionStandings, createCompetition, listCompetitions, createTeam, generateSchedule,
+  applyAutoSchedule, applyDelay, competitionGroupStandings, competitionStandings, createCompetition, listCompetitions, createTeam, generateSchedule,
   getCommandCenter, getCompetitionOfficials, getCompetitionScheduleConflicts, getMatch, getTeam, listMatches, listTeams,
-  lockMatch, matchDetail, previewDelayImpact, recordForfeit, recordResult, setMatchTime, registerTeam, visibleCompetition,
+  lockMatch, matchDetail, previewDelayImpact, recordForfeit, recordResult, setMatchTime, registerTeam, setTeamGroup, visibleCompetition,
 } from "./service.js";
 
 const id = z.object({ id: z.uuid() });
@@ -37,7 +37,12 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
 
   app.post("/api/v1/competitions", { config: { access: { action: "competition:create" } } }, async (req, reply) => {
     adultsOnly(req);
-    const body = z.object({ name: z.string().trim().min(1).max(100), format: z.enum(["ROUND_ROBIN", "SINGLE_ELIMINATION"]) }).parse(req.body);
+    const body = z.object({
+      name: z.string().trim().min(1).max(100),
+      format: z.enum(["ROUND_ROBIN", "SINGLE_ELIMINATION", "GROUPS_TO_PLAYOFFS"]),
+      groupCount: z.number().int().min(2).max(8).optional(),
+      advancePerGroup: z.number().int().min(1).max(4).optional(),
+    }).parse(req.body);
     return reply.status(201).send(await createCompetition(db, req.user!.id, body));
   });
 
@@ -52,9 +57,20 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
   });
 
   app.post("/api/v1/competitions/:id/teams", { config: { access: manage } }, async (req, reply) => {
-    const body = z.object({ teamId: z.uuid(), seed: z.number().int().min(1).optional() }).parse(req.body);
-    await registerTeam(db, compId(req), body.teamId, body.seed);
+    const body = z.object({
+      teamId: z.uuid(),
+      seed: z.number().int().min(1).optional(),
+      groupName: z.string().trim().min(1).max(40).optional(),
+    }).parse(req.body);
+    await registerTeam(db, compId(req), body.teamId, body.seed, body.groupName);
     return reply.status(201).send({ ok: true });
+  });
+
+  app.patch("/api/v1/competitions/:id/teams/:teamId/group", { config: { access: manage } }, async (req, reply) => {
+    const p = z.object({ id: z.uuid(), teamId: z.uuid() }).parse(req.params);
+    const body = z.object({ groupName: z.string().trim().min(1).max(40).nullable() }).parse(req.body);
+    await setTeamGroup(db, p.id, p.teamId, body.groupName);
+    return reply.send({ ok: true });
   });
 
   // Rosters: visible to the team's members and the competition's organizer only (the handlers answer 404 to everyone else).
@@ -91,6 +107,13 @@ export function registerCompetitions(app: FastifyInstance, db: Db) {
     const manager = req.user ? await can(db, req.user.id, "competition:manage", { type: "competition", id: cid }) : false;
     await visibleCompetition(db, cid, manager);
     return { items: await competitionStandings(db, cid) };
+  });
+
+  app.get("/api/v1/competitions/:id/group-standings", { config: { access: "public" } }, async (req) => {
+    const cid = compId(req);
+    const manager = req.user ? await can(db, req.user.id, "competition:manage", { type: "competition", id: cid }) : false;
+    await visibleCompetition(db, cid, manager);
+    return competitionGroupStandings(db, cid);
   });
 
   app.get("/api/v1/competitions/:id/officials", { config: { access: manage } }, async (req) => ({
