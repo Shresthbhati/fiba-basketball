@@ -71,3 +71,54 @@ under-18 accounts cannot host or join public games until guardian consent exists
   - `POST /api/v1/recruitment/invites/:id/accept` (athlete accepts invite; automatically enrols player onto team roster)
   - `POST /api/v1/recruitment/invites/:id/decline` (athlete declines invite)
   - `GET /api/v1/teams/:teamId/recruitment-invites` (lists outgoing recruitment invites for team coaches)
+
+
+## 5. Commercial Sponsor & Facility Analytics with k-Anonymity Guardrails (WP-8.6, Spec §8.6, §23, §24.2)
+- Database Tables:
+  - `sponsor_profiles`:
+    - `id`: UUID (v7 / uuid default)
+    - `user_id`: UUID references `users.id` (cascades on delete)
+    - `company_name`: text (organization or commercial brand name)
+    - `contact_email`: text (official corporate contact)
+    - `brand_category`: text (`APPAREL | FOOTWEAR | BEVERAGES | NUTRITION | EQUIPMENT | MEDIA | TECHNOLOGY | COMMUNITY | OTHER`)
+    - `website_url`: text nullable
+    - `status`: `PENDING | ACTIVE | SUSPENDED` (default `ACTIVE`)
+    - `created_at`: timestamp with timezone
+    - `updated_at`: timestamp with timezone
+    - Unique index: `(user_id)`
+    - Indexes: `(status)`, `(brand_category)`
+  - `sponsor_analytics_grants`:
+    - `id`: UUID
+    - `sponsor_id`: UUID references `sponsor_profiles.id` (cascades on delete)
+    - `court_id`: UUID references `courts.id` (cascades on delete, nullable)
+    - `competition_id`: UUID references `competitions.id` (cascades on delete, nullable)
+    - `scope`: `COURT | COMPETITION | GLOBAL` (default `COURT`)
+    - `granted_by`: UUID references `users.id` (court venue manager, tournament organizer, or platform admin)
+    - `expires_at`: timestamp with timezone (nullable)
+    - `created_at`: timestamp with timezone
+    - Indexes: `(sponsor_id)`, `(court_id)`, `(competition_id)`
+  - `sponsor_report_queries`:
+    - `id`: UUID
+    - `sponsor_id`: UUID references `sponsor_profiles.id` (nullable, set null on delete)
+    - `queried_by`: UUID references `users.id`
+    - `query_type`: `COURT_ANALYTICS | COMPETITION_ANALYTICS | FACILITY_OVERVIEW`
+    - `resource_id`: UUID
+    - `k_threshold`: integer (default 5, strictly $\ge 5$)
+    - `suppressed_buckets`: integer (number of cohorts masked for privacy)
+    - `created_at`: timestamp with timezone
+    - Indexes: `(queried_by, created_at)`, `(resource_id, query_type)`
+- Privacy & $k$-Anonymity Guarantees:
+  - $k$-Anonymity Standard ($k \ge 5$): Any demographic sub-cohort (e.g., age bracket, skill band, hourly attendance) with fewer than 5 unique participants is automatically suppressed and masked as `< 5 (Suppressed for Privacy)`.
+  - Blanket Demographic Suppression: If the total unique participants utilizing a court or participating in a tournament is $< 5$, all demographic breakdowns are completely suppressed to eliminate individual or minor re-identification risk.
+  - Minor Protection (Spec §24.2): Minor demographic data is never isolated in sub-cohorts smaller than $k=5$.
+  - Negative AuthZ (ADR-0010): Non-existent resources, unauthorized users, or revoked/expired grants return RFC 9457 `404 Not Found`.
+  - Non-Diagnostic Bounding (ADR-0009): Zero injury prediction, fatigue forecasting, or medical diagnostic claims.
+- API Endpoints:
+  - `POST /api/v1/sponsors/profile`: Registers or updates sponsor organization profile (automatically assigns `SPONSOR` role).
+  - `GET /api/v1/sponsors/me`: Fetches authenticated user's sponsor profile and active access grants.
+  - `POST /api/v1/sponsors/grants`: Issues an analytics grant to a verified sponsor profile for a specific court or tournament.
+  - `GET /api/v1/sponsors/grants`: Lists active grants issued or received.
+  - `DELETE /api/v1/sponsors/grants/:id`: Revokes an analytics grant immediately cutting off access.
+  - `GET /api/v1/sponsors/analytics/courts/:id`: Retrieves aggregated footfall, demographic cohorts, and peak usage with $k \ge 5$ masking.
+  - `GET /api/v1/sponsors/analytics/competitions/:id`: Retrieves tournament participation, rosters, and division demographics with $k \ge 5$ masking.
+  - `GET /api/v1/sponsors/analytics/audit-log`: Retrieves recent query history and suppression audit trail.
