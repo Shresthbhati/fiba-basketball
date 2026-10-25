@@ -445,6 +445,44 @@ export const filmClips = pgTable(
   (t) => [index("film_clips_game_idx").on(t.gameId)],
 );
 
+/** Telestrator & Visual Keyframe Annotations (WP-3.2, Master Spec §6.3, §6.8). Team-scoped; private to members (ADR-0010). */
+export const filmAnnotations = pgTable(
+  "film_annotations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gameId: uuid("game_id").notNull().references(() => filmGames.id, { onDelete: "cascade" }),
+    clipId: uuid("clip_id").references(() => filmClips.id, { onDelete: "set null" }),
+    timestampMs: integer("timestamp_ms").notNull(),
+    durationMs: integer("duration_ms").notNull().default(3000),
+    title: text("title").notNull().default("Annotation"),
+    category: varchar("category", { length: 30 }).notNull().default("TACTICAL"),
+    shapes: jsonb("shapes").$type<Array<{
+      id: string;
+      type: "ARROW" | "CIRCLE" | "SPOTLIGHT" | "RECTANGLE" | "FREEHAND" | "TEXT";
+      color: string;
+      strokeWidth?: number | undefined;
+      coordinates: {
+        x1: number;
+        y1: number;
+        x2?: number | undefined;
+        y2?: number | undefined;
+        radius?: number | undefined;
+        points?: Array<{ x: number; y: number }> | undefined;
+        text?: string | undefined;
+      };
+    }>>().notNull().default([]),
+    notes: text("notes"),
+    createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("film_annotations_game_idx").on(t.gameId),
+    index("film_annotations_clip_idx").on(t.clipId),
+    index("film_annotations_created_by_idx").on(t.createdBy),
+  ],
+);
+
 /** In-app notifications. Private to `user_id`; they never name or reveal other users. */
 export const notifications = pgTable(
   "notifications",

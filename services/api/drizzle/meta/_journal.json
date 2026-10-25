@@ -281,6 +281,13 @@
       "when": 1792755000000,
       "tag": "0039_scout_evaluations_and_consensus",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792756000000,
+      "tag": "0040_film_telestrator_annotations",
+      "breakpoints": true
     }
   ]
 }

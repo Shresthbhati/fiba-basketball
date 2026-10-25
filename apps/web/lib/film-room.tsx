@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { ApiError, api } from "./api";
 import { SCORING_TYPES, fmtTime, timelineLabel, type Clip, type FilmGame, type TeamMatch, type Timeline } from "./film-types";
 import { AutoClipModal } from "./auto-clip-modal";
+import { TelestratorCanvas } from "./telestrator-canvas";
 
 const msg = (e: unknown) => (e instanceof ApiError ? e.message : "Could not reach the server.");
 const TYPES = ["video/mp4", "video/webm", "video/quicktime"];
@@ -25,6 +26,7 @@ export function FilmRoom({ gameId }: { gameId: string }) {
   const [tags, setTags] = useState("");
   const [note, setNote] = useState("");
   const [showAutoClipModal, setShowAutoClipModal] = useState(false);
+  const [showTelestrator, setShowTelestrator] = useState(false);
 
   const loadGame = useCallback(async () => {
     try { setGame(await api<FilmGame>(`/film/games/${gameId}`)); }
@@ -139,6 +141,42 @@ export function FilmRoom({ gameId }: { gameId: string }) {
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} />
           {uploading && <span role="status"> Uploading… keep this page open.</span>}
         </label>
+      )}
+
+      {game.video.status === "READY" && (
+        <div style={{ marginTop: 8, marginBottom: 12, display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => setShowTelestrator((prev) => !prev)}
+            style={{
+              padding: "7px 14px",
+              borderRadius: 6,
+              background: showTelestrator ? "#059669" : "#1e293b",
+              color: "#ffffff",
+              fontSize: 13,
+              fontWeight: 500,
+              border: "1px solid #334155",
+              cursor: "pointer",
+            }}
+          >
+            {showTelestrator ? "✕ Close Telestrator Studio" : "🎨 Telestrator & Keyframe Studio"}
+          </button>
+        </div>
+      )}
+
+      {showTelestrator && (
+        <div style={{ marginBottom: 16 }}>
+          <TelestratorCanvas
+            gameId={gameId}
+            currentTimestampMs={now()}
+            onSeek={(ms) => {
+              if (video.current) {
+                video.current.currentTime = ms / 1000;
+              }
+            }}
+            canManage={game.canManage}
+          />
+        </div>
       )}
 
       <section aria-label="Scorebook">
