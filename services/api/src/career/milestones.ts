@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
+import { computeAchievementSignature } from "./achievements.js";
 import type { Db } from "../db/index.js";
 import { verifiedAchievements } from "../db/schema.js";
 import type { Line } from "../match/box-score.js";
@@ -171,13 +173,29 @@ export async function evaluateAndAwardMilestones(db: Db, userId: string) {
     const isUnlocked = val >= def.targetValue;
 
     if (isUnlocked && !existingMap.has(def.title)) {
+      const id = randomUUID();
+      const verifiedAt = new Date();
+      const signature = computeAchievementSignature({
+        id,
+        userId,
+        title: def.title,
+        category: def.category,
+        issuer: "COURT IQ Official OS",
+        verifiedAt: verifiedAt.toISOString(),
+        evidenceRef: `career:${userId}`,
+      });
+
       const [awarded] = await db
         .insert(verifiedAchievements)
         .values({
+          id,
           userId,
           title: def.title,
           category: def.category,
           issuer: "COURT IQ Official OS",
+          signature,
+          evidenceRef: `career:${userId}`,
+          verifiedAt,
         })
         .returning();
 

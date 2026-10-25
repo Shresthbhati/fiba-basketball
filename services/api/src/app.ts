@@ -28,6 +28,7 @@ import { registerFilmSearchRoutes } from "./film/search-routes.js";
 import { registerAssessment } from "./assessment/index.js";
 import { registerPlaybook } from "./playbook/index.js";
 import { registerPassportRoutes } from "./career/passport-routes.js";
+import { registerAchievementRoutes } from "./career/achievement-routes.js";
 import { registerPracticeRoutes } from "./practice/routes.js";
 import { registerCoachRoutes } from "./coach/routes.js";
 import { registerOpportunityRoutes } from "./opportunity/routes.js";
@@ -97,6 +98,7 @@ export async function buildApp(db: Db, opts: { secureCookies?: boolean; rateLimi
   registerPlaybook(app, db);
   registerReportRoutes(app, db);
   registerPassportRoutes(app, db);
+  registerAchievementRoutes(app, db);
   registerPracticeRoutes(app, db);
   registerCoachRoutes(app, db);
   registerMatchScoring(app, db, new MatchBus());
