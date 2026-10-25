@@ -6,6 +6,8 @@ WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY services/api/package.json services/api/
 COPY apps/web/package.json apps/web/
+COPY packages/court-renderer/package.json packages/court-renderer/
+COPY packages/design-system/package.json packages/design-system/
 RUN pnpm install --frozen-lockfile --filter @courtiq/api...
 COPY services/api services/api
 # Compile, then assemble a self-contained folder with production dependencies only (dist/ + drizzle/ migrations).

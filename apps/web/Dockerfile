@@ -8,6 +8,8 @@ ENV API_URL=$API_URL NEXT_TELEMETRY_DISABLED=1
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/web/package.json apps/web/
 COPY services/api/package.json services/api/
+COPY packages/court-renderer packages/court-renderer
+COPY packages/design-system packages/design-system
 RUN pnpm install --frozen-lockfile --filter @courtiq/web...
 COPY apps/web apps/web
 # Tests import the API source, which is not in this image, and Next type-checks every file in tsconfig `include`.

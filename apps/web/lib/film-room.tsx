@@ -132,7 +132,7 @@ export function FilmRoom({ gameId }: { gameId: string }) {
       {game.opponent && <p style={{ marginTop: 0 }}>vs {game.opponent}</p>}
       {error && <p role="alert" style={{ color: "#ff6b6b" }}>{error}</p>}
 
-      showMultiAngle ? (
+      {showMultiAngle ? (
         <MultiAngleVideoPlayer
           gameId={gameId}
           canManage={canManage}
@@ -140,7 +140,7 @@ export function FilmRoom({ gameId }: { gameId: string }) {
         />
       ) : game.video.status === "READY" ? (
         <video ref={video} controls preload="metadata" src={`/api/v1/film/games/${gameId}/video?v=${game.video.bytes}`} style={{ width: "100%", background: "#000", borderRadius: 8 }} aria-label="Game video" />
-      ) : <p>No video uploaded yet.</p>
+      ) : <p>No video uploaded yet.</p>}
 
       {canManage && (
         <label>
@@ -153,6 +153,22 @@ export function FilmRoom({ gameId }: { gameId: string }) {
 
       {game.video.status === "READY" && (
         <div style={{ marginTop: 8, marginBottom: 12, display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => setShowMultiAngle((prev) => !prev)}
+            style={{
+              padding: "7px 14px",
+              borderRadius: 6,
+              background: showMultiAngle ? "#2563eb" : "#1e293b",
+              color: "#ffffff",
+              fontSize: 13,
+              fontWeight: 500,
+              border: "1px solid #334155",
+              cursor: "pointer",
+            }}
+          >
+            {showMultiAngle ? "📹 Standard Player" : "🎥 Multi-Angle Sync Studio"}
+          </button>
           <button
             type="button"
             onClick={() => setShowTelestrator((prev) => !prev)}
