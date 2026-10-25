@@ -426,3 +426,140 @@ export function autoScheduleTournament(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Pool Play / Groups to Playoffs (Spec §10.1, §10.2, WP-1.7)
+// ---------------------------------------------------------------------------
+
+export interface GroupDefinition {
+  name: string; // "Group A", "Group B", etc.
+  teams: string[];
+}
+
+export interface GroupStageMatch {
+  stage: "GROUP";
+  groupName: string;
+  round: number;
+  slot: number;
+  home: string;
+  away: string;
+}
+
+export interface PlayoffStageMatch {
+  stage: "PLAYOFF";
+  round: number;
+  slot: number;
+  homePlaceholder?: string | undefined; // e.g. "A1", "B2"
+  awayPlaceholder?: string | undefined; // e.g. "B1", "A2"
+  homeTeamId: string | null;
+  awayTeamId: string | null;
+}
+
+export interface GroupsToPlayoffsPlan {
+  groups: GroupDefinition[];
+  groupMatches: GroupStageMatch[];
+  playoffMatches: PlayoffStageMatch[];
+}
+
+/**
+ * Generates a pool play to playoffs tournament structure (Spec §10.1, §10.2):
+ * 1. Partitions seeded or registered teams into K groups using snake seeding.
+ * 2. Generates round-robin fixtures for each group.
+ * 3. Generates the knockout playoffs bracket with crossover seed placeholders (e.g. A1 vs B2).
+ */
+export function groupsToPlayoffs(
+  teams: string[],
+  groupCount = 2,
+  advancePerGroup = 2
+): GroupsToPlayoffsPlan {
+  if (new Set(teams).size !== teams.length) throw new Error("Duplicate team ids");
+  if (teams.length < groupCount * 2) throw new Error(`Need at least ${groupCount * 2} teams for ${groupCount} groups`);
+  if (groupCount < 2) throw new Error("Need at least 2 groups for pool play");
+
+  // Generate group names: Group A, Group B, Group C...
+  const groupNames = Array.from({ length: groupCount }, (_, i) => `Group ${String.fromCharCode(65 + i)}`);
+
+  // Snake draft distribution of teams across groups
+  const groups: GroupDefinition[] = groupNames.map((name) => ({ name, teams: [] }));
+  let forward = true;
+  let gIdx = 0;
+  for (const teamId of teams) {
+    groups[gIdx]!.teams.push(teamId);
+    if (forward) {
+      if (gIdx === groupCount - 1) {
+        forward = false;
+      } else {
+        gIdx++;
+      }
+    } else {
+      if (gIdx === 0) {
+        forward = true;
+      } else {
+        gIdx--;
+      }
+    }
+  }
+
+  // Generate group round-robin matches
+  const groupMatches: GroupStageMatch[] = [];
+  let globalSlot = 1;
+  for (const group of groups) {
+    const pairings = roundRobin(group.teams);
+    for (const p of pairings) {
+      groupMatches.push({
+        stage: "GROUP",
+        groupName: group.name,
+        round: p.round,
+        slot: globalSlot++,
+        home: p.home,
+        away: p.away,
+      });
+    }
+  }
+
+  // Generate playoff bracket
+  const totalAdvancing = groupCount * advancePerGroup;
+  const playoffMatches: PlayoffStageMatch[] = [];
+
+  if (groupCount === 2 && advancePerGroup === 2) {
+    // Standard 2-group crossover semifinals
+    playoffMatches.push(
+      { stage: "PLAYOFF", round: 1, slot: 1, homePlaceholder: "A1", awayPlaceholder: "B2", homeTeamId: null, awayTeamId: null },
+      { stage: "PLAYOFF", round: 1, slot: 2, homePlaceholder: "B1", awayPlaceholder: "A2", homeTeamId: null, awayTeamId: null },
+      { stage: "PLAYOFF", round: 2, slot: 1, homePlaceholder: "Winner SF1", awayPlaceholder: "Winner SF2", homeTeamId: null, awayTeamId: null },
+    );
+  } else if (groupCount === 2 && advancePerGroup === 1) {
+    // Only group winners meet in final
+    playoffMatches.push(
+      { stage: "PLAYOFF", round: 1, slot: 1, homePlaceholder: "A1", awayPlaceholder: "B1", homeTeamId: null, awayTeamId: null }
+    );
+  } else if (groupCount === 4 && advancePerGroup === 2) {
+    // 8 teams Quarterfinals
+    playoffMatches.push(
+      { stage: "PLAYOFF", round: 1, slot: 1, homePlaceholder: "A1", awayPlaceholder: "B2", homeTeamId: null, awayTeamId: null },
+      { stage: "PLAYOFF", round: 1, slot: 2, homePlaceholder: "C1", awayPlaceholder: "D2", homeTeamId: null, awayTeamId: null },
+      { stage: "PLAYOFF", round: 1, slot: 3, homePlaceholder: "B1", awayPlaceholder: "A2", homeTeamId: null, awayTeamId: null },
+      { stage: "PLAYOFF", round: 1, slot: 4, homePlaceholder: "D1", awayPlaceholder: "C2", homeTeamId: null, awayTeamId: null },
+      { stage: "PLAYOFF", round: 2, slot: 1, homePlaceholder: "Winner QF1", awayPlaceholder: "Winner QF2", homeTeamId: null, awayTeamId: null },
+      { stage: "PLAYOFF", round: 2, slot: 2, homePlaceholder: "Winner QF3", awayPlaceholder: "Winner QF4", homeTeamId: null, awayTeamId: null },
+      { stage: "PLAYOFF", round: 3, slot: 1, homePlaceholder: "Winner SF1", awayPlaceholder: "Winner SF2", homeTeamId: null, awayTeamId: null },
+    );
+  } else {
+    // Generic fallback for any advancing count
+    let bracketSize = 2;
+    while (bracketSize < totalAdvancing) bracketSize *= 2;
+    for (let r = 1, count = bracketSize / 2; count >= 1; r++, count /= 2) {
+      for (let s = 1; s <= count; s++) {
+        playoffMatches.push({
+          stage: "PLAYOFF",
+          round: r,
+          slot: s,
+          homeTeamId: null,
+          awayTeamId: null,
+        });
+      }
+    }
+  }
+
+  return { groups, groupMatches, playoffMatches };
+}
+

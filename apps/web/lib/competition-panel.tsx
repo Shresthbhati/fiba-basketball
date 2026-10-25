@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ApiError, api } from "./api";
 import { BoxScore } from "./box-score";
 import { CommandCenterPanel } from "./command-center-panel";
-import { formatLabel, stateLabel, statusLabel, type CompetitionDetail, type MatchRow, type StandingRow } from "./competition-types";
+import { formatLabel, stateLabel, statusLabel, type CompetitionDetail, type MatchRow, type StandingRow, type GroupStandingsMap } from "./competition-types";
 import { TournamentBracket } from "./tournament-bracket";
+import { PoolPlayManager } from "./pool-play-manager";
 import { CompetitionEmbedModal } from "./competition-embed-modal";
 
 const roundName = (round: number, last: number, knockout: boolean) =>
@@ -81,6 +82,7 @@ export function CompetitionPanel({ id }: { id: string }) {
   const [comp, setComp] = useState<CompetitionDetail | null>(null);
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [table, setTable] = useState<StandingRow[]>([]);
+  const [groupStandings, setGroupStandings] = useState<GroupStandingsMap>({});
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -94,6 +96,13 @@ export function CompetitionPanel({ id }: { id: string }) {
       if (c.status !== "DRAFT") {
         setMatches((await api<{ items: MatchRow[] }>(`/competitions/${id}/matches`)).items);
         if (c.format === "ROUND_ROBIN") setTable((await api<{ items: StandingRow[] }>(`/competitions/${id}/standings`)).items);
+        if (c.format === "GROUPS_TO_PLAYOFFS") {
+          try {
+            setGroupStandings(await api<GroupStandingsMap>(`/competitions/${id}/group-standings`));
+          } catch {
+            // ignore
+          }
+        }
       }
       setError(null);
     } catch (err) {
@@ -204,6 +213,19 @@ export function CompetitionPanel({ id }: { id: string }) {
               </div>
             )}
           </details>
+        </section>
+      )}
+
+      {comp.format === "GROUPS_TO_PLAYOFFS" && matches.length > 0 && (
+        <section aria-label="Pool Play & Playoffs">
+          <PoolPlayManager
+            competitionId={id}
+            competitionName={comp.name}
+            groupStandings={groupStandings}
+            matches={matches}
+            teamNames={Object.fromEntries(comp.teams.map((t) => [t.id, t.name]))}
+            advancePerGroup={comp.advancePerGroup ?? 2}
+          />
         </section>
       )}
 

@@ -295,6 +295,13 @@
       "when": 1792757000000,
       "tag": "0041_match_court_and_scheduling",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792758000000,
+      "tag": "0042_pool_play_groups_to_playoffs",
+      "breakpoints": true
     }
   ]
 }
