@@ -15,6 +15,9 @@ export const users = pgTable("users", {
   totpEnabled: boolean("totp_enabled").notNull().default(false),
   totpRecoveryCodes: text("totp_recovery_codes"),
   totpVerifiedAt: timestamp("totp_verified_at", { withTimezone: true }),
+  // GDPR/CCPA Right to Erasure & Tombstoning (Spec §1.4, §24.4, WP-1.4)
+  isErased: boolean("is_erased").notNull().default(false),
+  erasedAt: timestamp("erased_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -1676,5 +1679,40 @@ export const protestTribunalRulings = pgTable(
   (t) => [
     uniqueIndex("uq_protest_ruling").on(t.protestId),
     index("idx_tribunal_protest").on(t.protestId),
+  ],
+);
+
+
+/** GDPR / CCPA Machine-Readable Data Export Archive Requests (Spec §1.4, §24.4, WP-1.4). */
+export const dataExportRequests = pgTable(
+  "data_export_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 20 }).notNull().default("READY"),
+    payload: text("payload").notNull(),
+    checksumSha256: varchar("checksum_sha256", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_data_export_requests_user").on(t.userId),
+  ],
+);
+
+/** GDPR / CCPA Right to Erasure & Account Anonymization Audit Records (Spec §1.4, §24.4, WP-1.4). */
+export const accountErasureRequests = pgTable(
+  "account_erasure_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    originalEmailHash: varchar("original_email_hash", { length: 64 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("COMPLETED"),
+    reason: text("reason"),
+    erasedAt: timestamp("erased_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_account_erasure_user").on(t.userId),
   ],
 );

@@ -330,6 +330,13 @@
       "when": 1792762000000,
       "tag": "0046_court_photos_community_verifications",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792763000000,
+      "tag": "0047_user_data_export_and_erasure",
+      "breakpoints": true
     }
   ]
 }
