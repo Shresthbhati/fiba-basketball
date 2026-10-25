@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { can, grantRole } from "../authz/service.js";
-import { getCompetition, getMatch, recordResult, visibleCompetition } from "../competition/service.js";
+import { getCompetition, getMatch, matchDetail, recordResult, visibleCompetition } from "../competition/service.js";
 import type { Db } from "../db/index.js";
 import { matchEvents, users } from "../db/schema.js";
 import { AuthError } from "../identity/service.js";
@@ -188,7 +188,22 @@ export function registerMatchScoring(app: FastifyInstance, db: Db, bus: MatchBus
 
   app.get("/api/v1/matches/:id/state", { config: { access: "public" } }, async (req) => {
     const m = await viewable(req);
-    return { matchState: m.state, ...(await matchState(db, m.id)) };
+    const detail = await matchDetail(db, m.id);
+    return {
+      matchId: m.id,
+      competitionId: m.competitionId,
+      competitionName: detail.competitionName,
+      round: m.round,
+      slot: m.slot,
+      stage: m.stage,
+      groupName: m.groupName,
+      courtName: m.courtName,
+      scheduledAt: detail.scheduledAt,
+      homeTeam: detail.home,
+      awayTeam: detail.away,
+      matchState: m.state,
+      ...(await matchState(db, m.id)),
+    };
   });
 
   app.get("/api/v1/matches/:id/events", { config: { access: "public" } }, async (req) => {
@@ -206,6 +221,18 @@ export function registerMatchScoring(app: FastifyInstance, db: Db, bus: MatchBus
     raw.write(`retry: 3000\n\n`);
     const unsub = bus.subscribe(m.id, (msg) => raw.write(`id: ${msg.id}\nevent: ${msg.type}\ndata: ${JSON.stringify(msg)}\n\n`));
     const ping = setInterval(() => raw.write(`: ping\n\n`), 15_000);
+    req.raw.on("close", () => { clearInterval(ping); unsub(); });
+  });
+
+  /** Spec §22.1 typed envelope Server-Sent Events endpoint */
+  app.get("/api/v1/streams/matches/:id", { config: { access: "public" } }, async (req, reply) => {
+    const m = await viewable(req);
+    reply.hijack();
+    const raw = reply.raw;
+    raw.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive", "x-accel-buffering": "no" });
+    raw.write("retry: 3000\n\n");
+    const unsub = bus.subscribe(m.id, (msg) => raw.write("id: " + msg.id + "\nevent: " + msg.type + "\ndata: " + JSON.stringify(msg) + "\n\n"));
+    const ping = setInterval(() => raw.write(": ping\n\n"), 15_000);
     req.raw.on("close", () => { clearInterval(ping); unsub(); });
   });
 

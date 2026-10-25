@@ -44,7 +44,7 @@ const tx = <T>(db: Db, fn: (t: Db) => Promise<T>) =>
   (db as unknown as { transaction: (f: (t: unknown) => Promise<T>) => Promise<T> }).transaction((t) => fn(t as Db));
 
 const toScored = (r: Row): ScoredEvent => ({
-  id: r.id, serverSeq: r.serverSeq, type: r.type as EventType, side: r.side as ScoredEvent["side"], period: r.period, correctsEventId: r.correctsEventId,
+  id: r.id, serverSeq: r.serverSeq, type: r.type as EventType, side: r.side as ScoredEvent["side"], period: r.period, clockSeconds: r.clockSeconds, correctsEventId: r.correctsEventId,
 });
 const publicEvent = (r: Row) => ({
   id: r.id, serverSeq: r.serverSeq, localSeq: r.localSeq, type: r.type, side: r.side, period: r.period,
