@@ -4,11 +4,19 @@ import type { Db } from "../db/index.js";
 import { competitionTeams, competitions, matchResultLog, matches, roleAssignments, teams, users } from "../db/schema.js";
 import { AuthError } from "../identity/service.js";
 import { canTransition, type MatchState } from "../match/match-state.js";
-import { roundRobin, singleElimination } from "./schedule.js";
+import {
+  autoScheduleTournament,
+  groupsToPlayoffs,
+  roundRobin,
+  singleElimination,
+  validateScheduleConflicts,
+  type AutoScheduleOptions,
+  type ScheduleValidationOptions,
+} from "./schedule.js";
 import { standings, type Result } from "./standings.js";
 
 type Match = typeof matches.$inferSelect;
-export type Format = "ROUND_ROBIN" | "SINGLE_ELIMINATION";
+export type Format = "ROUND_ROBIN" | "SINGLE_ELIMINATION" | "GROUPS_TO_PLAYOFFS";
 
 const tx = <T>(db: Db, fn: (t: Db) => Promise<T>) =>
   (db as unknown as { transaction: (f: (t: unknown) => Promise<T>) => Promise<T> }).transaction((t) => fn(t as Db));
@@ -25,8 +33,26 @@ export async function getTeam(db: Db, id: string) {
   return t;
 }
 
-export async function createCompetition(db: Db, userId: string, input: { name: string; format: Format }) {
-  const [c] = await db.insert(competitions).values({ name: input.name, format: input.format, organizerId: userId }).returning();
+export async function createCompetition(
+  db: Db,
+  userId: string,
+  input: {
+    name: string;
+    format: Format;
+    groupCount?: number | undefined;
+    advancePerGroup?: number | undefined;
+  }
+) {
+  const [c] = await db
+    .insert(competitions)
+    .values({
+      name: input.name,
+      format: input.format,
+      groupCount: input.groupCount ?? 2,
+      advancePerGroup: input.advancePerGroup ?? 2,
+      organizerId: userId,
+    })
+    .returning();
   await grantRole(db, userId, "ORGANIZER", { type: "competition", id: c!.id });
   return c!;
 }
@@ -53,19 +79,49 @@ export async function visibleCompetition(db: Db, id: string, canManage: boolean)
   return c;
 }
 
-export async function registerTeam(db: Db, competitionId: string, teamId: string, seed?: number) {
+export async function registerTeam(
+  db: Db,
+  competitionId: string,
+  teamId: string,
+  seed?: number | undefined,
+  groupName?: string | null | undefined
+) {
   const c = await getCompetition(db, competitionId);
   if (c.status !== "DRAFT") throw new AuthError(409, "Registration is closed");
   await getTeam(db, teamId);
   const [exists] = await db.select().from(competitionTeams)
     .where(and(eq(competitionTeams.competitionId, competitionId), eq(competitionTeams.teamId, teamId)));
   if (exists) throw new AuthError(409, "Team already registered");
-  await db.insert(competitionTeams).values({ competitionId, teamId, seed: seed ?? null });
+  await db.insert(competitionTeams).values({
+    competitionId,
+    teamId,
+    seed: seed ?? null,
+    groupName: groupName ?? null,
+  });
+}
+
+export async function setTeamGroup(
+  db: Db,
+  competitionId: string,
+  teamId: string,
+  groupName: string | null
+) {
+  const c = await getCompetition(db, competitionId);
+  if (c.status !== "DRAFT") throw new AuthError(409, "Cannot modify groups after schedule is generated");
+  await db
+    .update(competitionTeams)
+    .set({ groupName: groupName ?? null })
+    .where(and(eq(competitionTeams.competitionId, competitionId), eq(competitionTeams.teamId, teamId)));
 }
 
 export async function listTeams(db: Db, competitionId: string) {
   return db
-    .select({ id: teams.id, name: teams.name, seed: competitionTeams.seed })
+    .select({
+      id: teams.id,
+      name: teams.name,
+      seed: competitionTeams.seed,
+      groupName: competitionTeams.groupName,
+    })
     .from(competitionTeams)
     .innerJoin(teams, eq(teams.id, competitionTeams.teamId))
     .where(eq(competitionTeams.competitionId, competitionId))
@@ -86,6 +142,65 @@ export async function generateSchedule(db: Db, competitionId: string) {
       await t.insert(matches).values(
         roundRobin(reg.map((r) => r.teamId)).map((p, i) => ({ competitionId, round: p.round, slot: i + 1, homeTeamId: p.home, awayTeamId: p.away })),
       );
+    } else if (c.format === "GROUPS_TO_PLAYOFFS") {
+      const groupCount = c.groupCount ?? 2;
+      const advancePerGroup = c.advancePerGroup ?? 2;
+      if (reg.length < groupCount * 2) {
+        throw new AuthError(409, `Need at least ${groupCount * 2} teams for pool play (${groupCount} groups)`);
+      }
+      const ordered = [...reg].sort((a, b) => (a.seed ?? 1e9) - (b.seed ?? 1e9)).map((r) => r.teamId);
+      const plan = groupsToPlayoffs(ordered, groupCount, advancePerGroup);
+
+      // Persist team group assignments in competitionTeams
+      for (const grp of plan.groups) {
+        for (const tid of grp.teams) {
+          await t
+            .update(competitionTeams)
+            .set({ groupName: grp.name })
+            .where(and(eq(competitionTeams.competitionId, competitionId), eq(competitionTeams.teamId, tid)));
+        }
+      }
+
+      // Insert group stage matches
+      await t.insert(matches).values(
+        plan.groupMatches.map((m) => ({
+          competitionId,
+          round: m.round,
+          slot: m.slot,
+          stage: "GROUP",
+          groupName: m.groupName,
+          homeTeamId: m.home,
+          awayTeamId: m.away,
+        }))
+      );
+
+      // Insert playoff bracket matches
+      const playoffRows = await t.insert(matches).values(
+        plan.playoffMatches.map((m) => ({
+          competitionId,
+          round: m.round,
+          slot: m.slot,
+          stage: "PLAYOFF",
+          groupName: null,
+          homeTeamId: m.homeTeamId,
+          awayTeamId: m.awayTeamId,
+          isBye: false,
+        }))
+      ).returning();
+
+      // Link playoff rounds
+      const atPlayoff = (round: number, slot: number) =>
+        playoffRows.find((r) => r.round === round && r.slot === slot);
+
+      for (const m of playoffRows) {
+        const next = atPlayoff(m.round + 1, Math.ceil(m.slot / 2));
+        if (next) {
+          await t
+            .update(matches)
+            .set({ nextMatchId: next.id, nextSide: m.slot % 2 === 1 ? "home" : "away" })
+            .where(eq(matches.id, m.id));
+        }
+      }
     } else {
       // Seeded teams first (best seed first), then unseeded in registration order.
       const ordered = [...reg].sort((a, b) => (a.seed ?? 1e9) - (b.seed ?? 1e9)).map((r) => r.teamId);
@@ -137,17 +252,71 @@ export async function matchDetail(db: Db, id: string) {
   return {
     id: m.id, competitionId: m.competitionId, competitionName: c.name, round: m.round, slot: m.slot, state: m.state, isBye: m.isBye,
     scheduledAt: m.scheduledAt ? m.scheduledAt.toISOString() : null,
+    courtName: m.courtName ?? null,
+    estimatedDurationMinutes: m.estimatedDurationMinutes ?? 60,
+    stage: m.stage,
+    groupName: m.groupName ?? null,
     home: side(m.homeTeamId), away: side(m.awayTeamId), homeScore: m.homeScore, awayScore: m.awayScore,
   };
 }
 
 /** Set or clear the planned start time. Played (or bye) matches keep their time. */
-export async function setMatchTime(db: Db, id: string, scheduledAt: Date | null) {
+export async function setMatchTime(
+  db: Db,
+  id: string,
+  scheduledAt?: Date | null,
+  courtName?: string | null,
+  estimatedDurationMinutes?: number
+) {
   const m = await getMatch(db, id);
   if (m.isBye) throw new AuthError(409, "Bye matches have no time");
   if (m.state === "LOCKED" || m.state === "FINISHED") throw new AuthError(409, "A finished match can't be rescheduled");
-  await db.update(matches).set({ scheduledAt }).where(eq(matches.id, id));
+  await db
+    .update(matches)
+    .set({
+      ...(scheduledAt !== undefined ? { scheduledAt } : {}),
+      ...(courtName !== undefined ? { courtName } : {}),
+      ...(estimatedDurationMinutes !== undefined ? { estimatedDurationMinutes } : {}),
+    })
+    .where(eq(matches.id, id));
   return matchDetail(db, id);
+}
+
+export async function getCompetitionScheduleConflicts(
+  db: Db,
+  competitionId: string,
+  options: ScheduleValidationOptions = {}
+) {
+  await getCompetition(db, competitionId);
+  const allMatches = await listMatches(db, competitionId);
+  return validateScheduleConflicts(allMatches, options);
+}
+
+export async function applyAutoSchedule(
+  db: Db,
+  competitionId: string,
+  options: AutoScheduleOptions
+) {
+  await getCompetition(db, competitionId);
+  const allMatches = await listMatches(db, competitionId);
+  const unplayedMatches = allMatches.filter((m) => m.state === "SCHEDULED" && !m.isBye);
+
+  const result = autoScheduleTournament(unplayedMatches, options);
+
+  await tx(db, async (t) => {
+    for (const asgn of result.assignments) {
+      await t
+        .update(matches)
+        .set({
+          courtName: asgn.courtName,
+          scheduledAt: new Date(asgn.scheduledAt),
+          estimatedDurationMinutes: asgn.estimatedDurationMinutes,
+        })
+        .where(eq(matches.id, asgn.matchId));
+    }
+  });
+
+  return result;
 }
 
 export const FORFEIT_WINNER_POINTS = 20;
@@ -198,9 +367,131 @@ export async function lockMatch(db: Db, matchId: string) {
   return getMatch(db, matchId);
 }
 
+export async function competitionGroupStandings(db: Db, competitionId: string) {
+  const c = await getCompetition(db, competitionId);
+  if (c.format !== "GROUPS_TO_PLAYOFFS") {
+    throw new AuthError(409, "Group standings apply only to pool play competitions");
+  }
+
+  const compTeams = await db
+    .select({
+      id: teams.id,
+      name: teams.name,
+      groupName: competitionTeams.groupName,
+    })
+    .from(competitionTeams)
+    .innerJoin(teams, eq(competitionTeams.teamId, teams.id))
+    .where(eq(competitionTeams.competitionId, competitionId));
+
+  const names = new Map(compTeams.map((t) => [t.id, t.name]));
+
+  const groupNames = Array.from(
+    new Set(compTeams.map((t) => t.groupName).filter((g): g is string => typeof g === "string" && g.length > 0))
+  ).sort();
+
+  const groupMatches = await db
+    .select()
+    .from(matches)
+    .where(
+      and(
+        eq(matches.competitionId, competitionId),
+        eq(matches.stage, "GROUP"),
+        inArray(matches.state, ["FINISHED", "LOCKED"])
+      )
+    );
+
+  const out: Record<string, Array<{ rank: number; name: string; groupName: string; team: string; played: number; wins: number; losses: number; points: number; pointsFor: number; pointsAgainst: number; diff: number }>> = {};
+
+  for (const gName of groupNames) {
+    const groupTeamIds = compTeams.filter((t) => t.groupName === gName).map((t) => t.id);
+    const matchesInGroup = groupMatches.filter((m) => m.groupName === gName && m.homeTeamId && m.awayTeamId);
+    const results: Result[] = matchesInGroup.map((m) => ({
+      home: m.homeTeamId!,
+      away: m.awayTeamId!,
+      homeScore: m.homeScore!,
+      awayScore: m.awayScore!,
+      forfeit: m.forfeit,
+    }));
+    const ranked = standings(groupTeamIds, results).map((row, i) => ({
+      rank: i + 1,
+      name: names.get(row.team) ?? "Unknown",
+      groupName: gName,
+      ...row,
+    }));
+    out[gName] = ranked;
+  }
+
+  return out;
+}
+
 async function refreshCompetitionStatus(db: Db, competitionId: string) {
+  const c = await getCompetition(db, competitionId);
   const all = await listMatches(db, competitionId);
-  const done = all.length > 0 && all.every((m) => m.state === "FINISHED" || m.state === "LOCKED");
+
+  // If GROUPS_TO_PLAYOFFS, check if group stage has finished and advance qualified teams into Round 1 playoffs
+  if (c.format === "GROUPS_TO_PLAYOFFS") {
+    const groupMatches = all.filter((m) => m.stage === "GROUP");
+    const groupMatchesFinished =
+      groupMatches.length > 0 &&
+      groupMatches.every((m) => m.state === "FINISHED" || m.state === "LOCKED");
+
+    if (groupMatchesFinished) {
+      const groupStandingsMap = await competitionGroupStandings(db, competitionId);
+      const groupNames = Object.keys(groupStandingsMap).sort();
+      const playoffR1 = all.filter((m) => m.stage === "PLAYOFF" && m.round === 1);
+
+      if (groupNames.length === 2 && playoffR1.length >= 2) {
+        const groupA = groupStandingsMap["Group A"] ?? [];
+        const groupB = groupStandingsMap["Group B"] ?? [];
+
+        const a1 = groupA[0]?.team ?? null;
+        const a2 = groupA[1]?.team ?? null;
+        const b1 = groupB[0]?.team ?? null;
+        const b2 = groupB[1]?.team ?? null;
+
+        const s1 = playoffR1.find((m) => m.slot === 1);
+        if (s1 && (!s1.homeTeamId || !s1.awayTeamId)) {
+          await db
+            .update(matches)
+            .set({ homeTeamId: a1, awayTeamId: b2 })
+            .where(eq(matches.id, s1.id));
+        }
+
+        const s2 = playoffR1.find((m) => m.slot === 2);
+        if (s2 && (!s2.homeTeamId || !s2.awayTeamId)) {
+          await db
+            .update(matches)
+            .set({ homeTeamId: b1, awayTeamId: a2 })
+            .where(eq(matches.id, s2.id));
+        }
+      } else if (groupNames.length === 4 && playoffR1.length >= 4) {
+        const groupA = groupStandingsMap["Group A"] ?? [];
+        const groupB = groupStandingsMap["Group B"] ?? [];
+        const groupC = groupStandingsMap["Group C"] ?? [];
+        const groupD = groupStandingsMap["Group D"] ?? [];
+
+        const qf1 = playoffR1.find((m) => m.slot === 1);
+        if (qf1 && (!qf1.homeTeamId || !qf1.awayTeamId)) {
+          await db.update(matches).set({ homeTeamId: groupA[0]?.team, awayTeamId: groupB[1]?.team }).where(eq(matches.id, qf1.id));
+        }
+        const qf2 = playoffR1.find((m) => m.slot === 2);
+        if (qf2 && (!qf2.homeTeamId || !qf2.awayTeamId)) {
+          await db.update(matches).set({ homeTeamId: groupC[0]?.team, awayTeamId: groupD[1]?.team }).where(eq(matches.id, qf2.id));
+        }
+        const qf3 = playoffR1.find((m) => m.slot === 3);
+        if (qf3 && (!qf3.homeTeamId || !qf3.awayTeamId)) {
+          await db.update(matches).set({ homeTeamId: groupB[0]?.team, awayTeamId: groupA[1]?.team }).where(eq(matches.id, qf3.id));
+        }
+        const qf4 = playoffR1.find((m) => m.slot === 4);
+        if (qf4 && (!qf4.homeTeamId || !qf4.awayTeamId)) {
+          await db.update(matches).set({ homeTeamId: groupD[0]?.team, awayTeamId: groupC[1]?.team }).where(eq(matches.id, qf4.id));
+        }
+      }
+    }
+  }
+
+  const refreshed = await listMatches(db, competitionId);
+  const done = refreshed.length > 0 && refreshed.every((m) => m.state === "FINISHED" || m.state === "LOCKED");
   await db.update(competitions).set({ status: done ? "COMPLETED" : "PUBLISHED" }).where(eq(competitions.id, competitionId));
 }
 
@@ -245,6 +536,7 @@ export async function getCommandCenter(db: Db, competitionId: string) {
   const teamList = await listTeams(db, competitionId);
   const teamMap = new Map(teamList.map((t) => [t.id, t.name]));
   const officials = await getCompetitionOfficials(db, competitionId);
+  const scheduleValidation = validateScheduleConflicts(allMatches);
   const now = new Date();
 
   const formattedMatches = allMatches.map((m) => {
@@ -263,6 +555,8 @@ export async function getCommandCenter(db: Db, competitionId: string) {
       state: m.state,
       isBye: m.isBye,
       scheduledAt: m.scheduledAt ? m.scheduledAt.toISOString() : null,
+    courtName: m.courtName ?? null,
+    estimatedDurationMinutes: m.estimatedDurationMinutes ?? 60,
       homeScore: m.homeScore,
       awayScore: m.awayScore,
       forfeit: m.forfeit,
@@ -270,6 +564,8 @@ export async function getCommandCenter(db: Db, competitionId: string) {
         delayed: isDelayed,
         unresolved: isUnresolved,
         missingOfficials,
+        hasConflict: scheduleValidation.conflicts.some((cf) => cf.matchIds.includes(m.id)),
+        conflicts: scheduleValidation.conflicts.filter((cf) => cf.matchIds.includes(m.id)),
       },
     };
   });
@@ -288,8 +584,10 @@ export async function getCommandCenter(db: Db, competitionId: string) {
       finished: finishedCount,
       delayed: delayedCount,
       unresolved: unresolvedCount,
+      conflictCount: scheduleValidation.conflictCount,
       officialsCount: officials.length,
     },
+    conflicts: scheduleValidation.conflicts,
     officials,
     matches: formattedMatches,
   };

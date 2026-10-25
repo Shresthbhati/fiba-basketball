@@ -167,7 +167,9 @@ export const competitions = pgTable("competitions", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   organizerId: uuid("organizer_id").notNull().references(() => users.id),
-  format: text("format").notNull(), // ROUND_ROBIN | SINGLE_ELIMINATION
+  format: text("format").notNull(), // ROUND_ROBIN | SINGLE_ELIMINATION | GROUPS_TO_PLAYOFFS
+  groupCount: integer("group_count").default(2),
+  advancePerGroup: integer("advance_per_group").default(2),
   status: text("status").notNull().default("DRAFT"), // DRAFT | PUBLISHED | COMPLETED
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -178,9 +180,13 @@ export const competitionTeams = pgTable(
     competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
     teamId: uuid("team_id").notNull().references(() => teams.id),
     seed: integer("seed"),
+    groupName: text("group_name"),
     registeredAt: timestamp("registered_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.competitionId, t.teamId] })],
+  (t) => [
+    primaryKey({ columns: [t.competitionId, t.teamId] }),
+    index("competition_teams_group_idx").on(t.competitionId, t.groupName),
+  ],
 );
 
 export const matches = pgTable(
@@ -190,18 +196,26 @@ export const matches = pgTable(
     competitionId: uuid("competition_id").notNull().references(() => competitions.id, { onDelete: "cascade" }),
     round: integer("round").notNull(),
     slot: integer("slot").notNull(),
+    stage: text("stage").notNull().default("REGULAR"), // GROUP | PLAYOFF | REGULAR
+    groupName: text("group_name"),
     homeTeamId: uuid("home_team_id").references(() => teams.id),
     awayTeamId: uuid("away_team_id").references(() => teams.id),
     state: text("state").notNull().default("SCHEDULED"), // SCHEDULED | LIVE | FINISHED | LOCKED
     isBye: boolean("is_bye").notNull().default(false),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    courtName: text("court_name"),
+    estimatedDurationMinutes: integer("estimated_duration_minutes").notNull().default(60),
     homeScore: integer("home_score"),
     awayScore: integer("away_score"),
     forfeit: boolean("forfeit").notNull().default(false),
     nextMatchId: uuid("next_match_id"),
     nextSide: text("next_side"), // home | away
   },
-  (t) => [index("matches_competition_idx").on(t.competitionId)],
+  (t) => [
+    index("matches_competition_idx").on(t.competitionId),
+    index("matches_competition_stage_idx").on(t.competitionId, t.stage),
+    index("matches_court_scheduled_idx").on(t.courtName, t.scheduledAt),
+  ],
 );
 
 // Append-only: every entered or corrected result is kept.
